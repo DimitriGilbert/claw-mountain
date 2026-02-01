@@ -298,6 +298,12 @@ if [ -d "$MOLT_HOME" ]; then
   ${0%/*}/molt-stop "$MOLT_NAME" -d "$BASE_DIR" --force 2>/dev/null || true
 fi
 
+# Remove ALL cron jobs for molt user (NUCLEAR - as requested)
+if id "$MOLT_NAME" &>/dev/null; then
+  log "Removing all cron jobs for $MOLT_NAME..." 1
+  sudo -u "$MOLT_NAME" crontab -r 2>/dev/null || log "No cron jobs to remove (or crontab not found)" 2
+fi
+
 # Kill any remaining browser processes (best effort)
 if id "$MOLT_NAME" &>/dev/null; then
   pkill -u "$MOLT_NAME" -f "firefox|chrome|chromium|brave" 2>/dev/null || true

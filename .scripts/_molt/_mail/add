@@ -529,6 +529,40 @@ log "  SMTP: $MSMTPRC" 0
 log "  IMAP: $MBSYNCRC" 0
 log "  Mail: $ACCOUNT_MAILDIR" 0
 log "" 0
+log "Configuring OpenClaw hooks and skill watcher..." 1
+
+# Configure OpenClaw hooks for webhook (if not already configured)
+OPENCLAW_CONFIG="$OPENCLAW_DIR/openclaw.json"
+if [[ -f "$OPENCLAW_CONFIG" ]]; then
+    # Check if hooks are enabled
+    if ! jq -e '.hooks.enabled' "$OPENCLAW_CONFIG" &>/dev/null; then
+        # Generate random token
+        HOOK_TOKEN=$(openssl rand -hex 16)
+        
+        # Add hooks configuration
+        jq --arg token "$HOOK_TOKEN" '.hooks = {"enabled": true, "token": $token, "path": "/hooks"}' "$OPENCLAW_CONFIG" > "${OPENCLAW_CONFIG}.tmp"
+        mv "${OPENCLAW_CONFIG}.tmp" "$OPENCLAW_CONFIG"
+        sudo chown "$MOLT_NAME:$MOLT_NAME" "$OPENCLAW_CONFIG"
+        log "Added hooks configuration with auto-generated token" 2
+    else
+        log "Hooks already configured" 2
+    fi
+    
+    # Check if skill watcher is enabled
+    if ! jq -e '.skills.load.watch' "$OPENCLAW_CONFIG" &>/dev/null; then
+        # Add skill watcher configuration
+        jq '.skills.load.watch = true' "$OPENCLAW_CONFIG" > "${OPENCLAW_CONFIG}.tmp"
+        mv "${OPENCLAW_CONFIG}.tmp" "$OPENCLAW_CONFIG"
+        sudo chown "$MOLT_NAME:$MOLT_NAME" "$OPENCLAW_CONFIG"
+        log "Enabled skill auto-reload (watch: true)" 2
+    else
+        log "Skill watcher already enabled" 2
+    fi
+else
+    log "Warning: openclaw.json not found at $OPENCLAW_CONFIG" -1
+fi
+
+log "" 0
 log "Setting up mail gatekeeper skill..." 1
 
 # Create skill directory
@@ -554,16 +588,6 @@ if [[ ! -f "$SKILL_DIR/SKILL.md" ]]; then
     fi
 else
     log "Skill already exists at $SKILL_DIR/SKILL.md" 2
-fi
-
-# Enable skill in openclaw.json if not already
-OPENCLAW_CONFIG="$OPENCLAW_DIR/openclaw.json"
-if [[ -f "$OPENCLAW_CONFIG" ]]; then
-    # Check if skill watcher is enabled
-    if ! grep -q '"watch":' "$OPENCLAW_CONFIG" 2>/dev/null; then
-        log "Note: Skill auto-reload not enabled. Add to openclaw.json:" 2
-        log '  skills: { load: { watch: true } }' 0
-    fi
 fi
 
 log "" 0
