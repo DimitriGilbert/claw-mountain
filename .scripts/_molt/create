@@ -529,11 +529,10 @@ else
   log "Note: mbsync not found - install with: sudo apt-get install isync" 2
 fi
 
-# Install Node.js globally if not available
+# Verify Node.js is available
 log "Checking Node.js..." 1
 if ! command -v npm &>/dev/null; then
-  log "Installing Node.js globally..." 2
-  sudo apt-get update -qq && sudo apt-get install -y -qq nodejs npm 2>/dev/null || log "Warning: Failed to install Node.js via apt-get" -1
+  die "Node.js/npm is required but not found. Please install it manually (e.g., sudo apt-get install nodejs npm)" 1
 fi
 
 # Install skills for the molt user (per-molt, not global)
