@@ -1,6 +1,6 @@
 #!/bin/bash
 # @parseArger-begin
-# @parseArger-help "Start a molt (OpenClaw bot) gateway" --option "help" --short-option "h"
+# @parseArger-help "Completely remove a molt (user, home directory, processes)" --option "help" --short-option "h"
 # @parseArger-verbose --option "verbose" --level "0" --quiet-option "quiet"
 _has_colors=0
 if [ -t 1 ]; then # Check if stdout is a terminal
@@ -10,10 +10,10 @@ if [ -t 1 ]; then # Check if stdout is a terminal
 	fi
 fi
 # @parseArger-declarations
-# @parseArger pos name "Molt name to start"
+# @parseArger pos name "Molt name to delete"
 # @parseArger opt base-dir "Base directory for molts" --short d --default-value "/home/didi/molts" --complete "directory"
-# @parseArger opt port "Override gateway port" --short p
-# @parseArger flag daemon "Run as background daemon (systemd/user service)"
+# @parseArger flag force "Skip confirmation prompt"
+# @parseArger flag keep-home "Keep home directory (only remove user)"
 # @parseArger flag verbose "Enable verbose output" --short v
 # @parseArger-declarations-end
 
@@ -50,10 +50,14 @@ _positionals=();
 _optional_positionals=();
 _arg_name="";
 # OPTIONALS ARGUMENTS
-_arg_base_dir="/home/didi/molts"
-_arg_port=
+# Detect base directory (where clmnt is located)
+_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+# Go up two levels: .scripts/_molt/ -> .scripts/ -> project root
+PROJECT_ROOT="$(cd "$_SCRIPT_DIR/../.." && pwd)"
+_arg_base_dir="$PROJECT_ROOT"
 # FLAGS
-_arg_daemon="off"
+_arg_force="off"
+_arg_keep_home="off"
 _arg_verbose="off"
 # NESTED
 _verbose_level="0";
@@ -66,14 +70,14 @@ print_help()
 
 	if [[ "$_helpHasBeenPrinted" == "1" ]]; then
 		_helpHasBeenPrinted=0;
-		echo -e "Start a molt (OpenClaw bot) gateway:"
-	echo -e "	name: Molt name to start"
-	echo -e "	-d, --base-dir <base-dir>: Base directory for molts [default: ' /home/didi/molts ']"
-	echo -e "	-p, --port <port>: Override gateway port"
-	echo -e "	--daemon|--no-daemon: Run as background daemon (systemd/user service)"
+		echo -e "Completely remove a molt (user, home directory, processes):"
+	echo -e "	name: Molt name to delete"
+	echo -e "	-d, --base-dir <base-dir>: Base directory for molts [default: '<auto-detected>']"
+	echo -e "	--force|--no-force: Skip confirmation prompt"
+	echo -e "	--keep-home|--no-keep-home: Keep home directory (only remove user)"
 	echo -e "	-v|--verbose|--no-verbose: Enable verbose output"
 	echo -e "Usage :
-	$0 <name> [--base-dir <value>] [--port <value>] [--[no-]daemon] [--[no-]verbose]";
+	$0 <name> [--base-dir <value>] [--[no-]force] [--[no-]keep-home] [--[no-]verbose]";
 	fi
 
 }
@@ -132,25 +136,17 @@ parse_commandline()
 				_arg_base_dir="${1##-d}"
 				;;
 			
-			-p|--port)
-				test $# -lt 2 && die "Missing value for the option: '$_key'" 1
-				local _regex='^[0-9]+$';if [[ -n "$_regex" ]] && [[ ! "$2" =~ $_regex ]]; then die "port does not match pattern: $_regex"; fi; _arg_port="$2"
-				shift
+			--force)
+				_arg_force="on"
 				;;
-			--port=*)
-			    local _regex='^[0-9]+$';if [[ -n "$_regex" ]] && [[ ! "${1##--port=}" =~ $_regex ]]; then die "port does not match pattern: $_regex"; fi;
-				_arg_port="${1##--port=}"
+			--no-force)
+				_arg_force="off"
 				;;
-			-p*)
-			      local _regex='^[0-9]+$';if [[ -n "$_regex" ]] && [[ ! "${1##-p}" =~ $_regex ]]; then die "port does not match pattern: $_regex"; fi;
-				_arg_port="${1##-p}"
+			--keep-home)
+				_arg_keep_home="on"
 				;;
-			
-			--daemon)
-				_arg_daemon="on"
-				;;
-			--no-daemon)
-				_arg_daemon="off"
+			--no-keep-home)
+				_arg_keep_home="off"
 				;;
 			-v|--verbose)
 				_arg_verbose="on"
@@ -234,8 +230,8 @@ print_debug()
 	
 	echo -e "	name: ${_arg_name}";
 	echo -e "	base-dir: ${_arg_base_dir}";
-	echo -e "	port: ${_arg_port}";
-	echo -e "	daemon: ${_arg_daemon}";
+	echo -e "	force: ${_arg_force}";
+	echo -e "	keep-home: ${_arg_keep_home}";
 	echo -e "	verbose: ${_arg_verbose}";
 
 }
@@ -262,85 +258,68 @@ MOLT_NAME="$_arg_name"
 BASE_DIR="$_arg_base_dir"
 MOLT_HOME="$BASE_DIR/$MOLT_NAME"
 
-# Check if molt exists
-if [ ! -d "$MOLT_HOME" ]; then
-  die "Molt '$MOLT_NAME' not found at $MOLT_HOME" 1
+# Check if molt exists (directory OR user)
+MOLT_EXISTS=0
+if [ -d "$MOLT_HOME" ]; then
+  MOLT_EXISTS=1
+fi
+if id "$MOLT_NAME" &>/dev/null; then
+  MOLT_EXISTS=1
 fi
 
-# Check if user exists
-if ! id "$MOLT_NAME" &>/dev/null; then
-  die "User '$MOLT_NAME' does not exist" 1
-fi
-
-# Load configuration
-OPENCLAW_DIR="$MOLT_HOME/.openclaw"
-CONFIG_FILE="$OPENCLAW_DIR/openclaw.json"
-PID_FILE="$OPENCLAW_DIR/gateway.pid"
-
-if [ ! -f "$CONFIG_FILE" ]; then
-  die "OpenClaw config not found at $CONFIG_FILE" 1
-fi
-
-# Get port from config or override
-if [ -n "$_arg_port" ]; then
-  MOLT_PORT="$_arg_port"
-else
-  MOLT_PORT=$(grep -o '"port":[[:space:]]*[0-9]*' "$CONFIG_FILE" 2>/dev/null | grep -o '[0-9]*$' || echo "19001")
-fi
-
-# Check if already running
-if [ -f "$PID_FILE" ]; then
-  OLD_PID=$(cat "$PID_FILE")
-  if ps -p "$OLD_PID" > /dev/null 2>&1; then
-    die "Molt '$MOLT_NAME' is already running (PID: $OLD_PID)" 1
-  fi
-fi
-
-# Check for orphan processes
-ORPHAN_PID=$(pgrep -u "$MOLT_NAME" -f "openclaw.*gateway" | head -1 || echo "")
-if [ -n "$ORPHAN_PID" ]; then
-  log "Found orphan gateway process (PID: $ORPHAN_PID), stopping it first" -1
-  sudo -u "$MOLT_NAME" kill "$ORPHAN_PID" 2>/dev/null || true
-  sleep 2
-fi
-
-log "Starting molt '$MOLT_NAME' on port $MOLT_PORT" 1
-
-# Set up environment
-export OPENCLAW_CONFIG_PATH="$CONFIG_FILE"
-export OPENCLAW_STATE_DIR="$OPENCLAW_DIR"
-
-# Start OpenClaw gateway
-if [ "$_arg_daemon" = "on" ]; then
-  # Run as daemon/service
-  log "Starting as daemon..." 1
-  sudo -u "$MOLT_NAME" bash -c "
-    export OPENCLAW_CONFIG_PATH='$CONFIG_FILE'
-    export OPENCLAW_STATE_DIR='$OPENCLAW_DIR'
-    nohup openclaw gateway --port $MOLT_PORT > $OPENCLAW_DIR/gateway.log 2>&1 &
-    echo \$! > '$PID_FILE'
-  "
-else
-  # Run in foreground (or background but trackable)
-  log "Starting gateway..." 1
-  sudo -u "$MOLT_NAME" bash -c "
-    export OPENCLAW_CONFIG_PATH='$CONFIG_FILE'
-    export OPENCLAW_STATE_DIR='$OPENCLAW_DIR'
-    openclaw gateway --port $MOLT_PORT > '$OPENCLAW_DIR/gateway.log' 2>&1 &
-    echo \$! > '$PID_FILE'
-  "
-fi
-
-# Wait a moment and check if it started
-sleep 2
-if [ -f "$PID_FILE" ]; then
-  NEW_PID=$(cat "$PID_FILE")
-  if ps -p "$NEW_PID" > /dev/null 2>&1; then
-    log "Molt '$MOLT_NAME' started successfully (PID: $NEW_PID)" 1
-    log "Dashboard: http://127.0.0.1:$MOLT_PORT/" 1
+if [ $MOLT_EXISTS -eq 0 ]; then
+  if [ "$_arg_force" = "on" ]; then
+    log "No molt '$MOLT_NAME' found, but --force specified - proceeding anyway" -1
   else
-    die "Failed to start molt '$MOLT_NAME' - check $OPENCLAW_DIR/gateway.log" 1
+    die "Molt '$MOLT_NAME' not found at $MOLT_HOME and user does not exist" 1
   fi
-else
-  die "Failed to start molt '$MOLT_NAME' - PID file not created" 1
 fi
+
+# Confirmation prompt
+if [ "$_arg_force" = "off" ]; then
+  echo "WARNING: This will permanently delete molt '$MOLT_NAME'"
+  echo "Home directory: $MOLT_HOME"
+  if [ "$_arg_keep_home" = "off" ]; then
+    echo "This will remove the user AND delete the home directory"
+  else
+    echo "This will remove the user but KEEP the home directory"
+  fi
+  echo ""
+  read -p "Are you sure? Type 'yes' to confirm: " confirm
+  if [ "$confirm" != "yes" ]; then
+    log "Deletion cancelled" 1
+    exit 0
+  fi
+fi
+
+# Stop any running processes (best effort)
+if [ -d "$MOLT_HOME" ]; then
+  log "Stopping any running processes for $MOLT_NAME..." 1
+  ${0%/*}/molt-stop "$MOLT_NAME" -d "$BASE_DIR" --force 2>/dev/null || true
+fi
+
+# Kill any remaining browser processes (best effort)
+if id "$MOLT_NAME" &>/dev/null; then
+  pkill -u "$MOLT_NAME" -f "firefox|chrome|chromium|brave" 2>/dev/null || true
+fi
+
+# Remove user (if exists)
+if id "$MOLT_NAME" &>/dev/null; then
+  log "Removing user '$MOLT_NAME'..." 1
+  sudo userdel "$MOLT_NAME" 2>/dev/null || log "Warning: Failed to remove user '$MOLT_NAME' (may require manual cleanup)" -1
+fi
+
+# Remove home directory (unless --keep-home)
+if [ "$_arg_keep_home" = "off" ]; then
+  if [ -d "$MOLT_HOME" ]; then
+    log "Removing home directory: $MOLT_HOME" 1
+    sudo rm -rf "$MOLT_HOME" 2>/dev/null || log "Warning: Failed to remove home directory (may require manual cleanup)" -1
+  fi
+fi
+
+# Clean up any stale PID files
+if [ -f "$MOLT_HOME/.openclaw/gateway.pid" ]; then
+  rm -f "$MOLT_HOME/.openclaw/gateway.pid" 2>/dev/null || true
+fi
+
+log "Molt '$MOLT_NAME' cleanup completed" 1

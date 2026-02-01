@@ -1,6 +1,6 @@
 #!/bin/bash
 # @parseArger-begin
-# @parseArger-help "View or tail logs for a molt" --option "help" --short-option "h"
+# @parseArger-help "List all molts and their status" --option "help" --short-option "h"
 # @parseArger-verbose --option "verbose" --level "0" --quiet-option "quiet"
 _has_colors=0
 if [ -t 1 ]; then # Check if stdout is a terminal
@@ -10,11 +10,8 @@ if [ -t 1 ]; then # Check if stdout is a terminal
 	fi
 fi
 # @parseArger-declarations
-# @parseArger pos name "Molt name"
-# @parseArger opt lines "Number of lines to show" --short n --default-value "50"
 # @parseArger opt base-dir "Base directory for molts" --short d --default-value "/home/didi/molts" --complete "directory"
-# @parseArger flag follow "Follow/tail logs in real-time" --short f
-# @parseArger flag verbose "Enable verbose output" --short v
+# @parseArger flag verbose "Show detailed information" --short v
 # @parseArger-declarations-end
 
 # @parseArger-utils
@@ -48,12 +45,13 @@ begins_with_short_option()
 # POSITIONALS ARGUMENTS
 _positionals=();
 _optional_positionals=();
-_arg_name="";
 # OPTIONALS ARGUMENTS
-_arg_lines="50"
-_arg_base_dir="/home/didi/molts"
+# Detect base directory (where clmnt is located)
+_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+# Go up two levels: .scripts/_molt/ -> .scripts/ -> project root
+PROJECT_ROOT="$(cd "$_SCRIPT_DIR/../.." && pwd)"
+_arg_base_dir="$PROJECT_ROOT"
 # FLAGS
-_arg_follow="off"
 _arg_verbose="off"
 # NESTED
 _verbose_level="0";
@@ -66,14 +64,11 @@ print_help()
 
 	if [[ "$_helpHasBeenPrinted" == "1" ]]; then
 		_helpHasBeenPrinted=0;
-		echo -e "View or tail logs for a molt:"
-	echo -e "	name: Molt name"
-	echo -e "	-n, --lines <lines>: Number of lines to show [default: ' 50 ']"
-	echo -e "	-d, --base-dir <base-dir>: Base directory for molts [default: ' /home/didi/molts ']"
-	echo -e "	-f|--follow|--no-follow: Follow/tail logs in real-time"
-	echo -e "	-v|--verbose|--no-verbose: Enable verbose output"
+		echo -e "List all molts and their status:"
+	echo -e "	-d, --base-dir <base-dir>: Base directory for molts [default: '<auto-detected>']"
+	echo -e "	-v|--verbose|--no-verbose: Show detailed information"
 	echo -e "Usage :
-	$0 <name> [--lines <value>] [--base-dir <value>] [--[no-]follow] [--[no-]verbose]";
+	$0 [--base-dir <value>] [--[no-]verbose]";
 	fi
 
 }
@@ -120,20 +115,6 @@ parse_commandline()
 	do
 		_key="$1"
 		case "$_key" in
-			-n|--lines)
-				test $# -lt 2 && die "Missing value for the option: '$_key'" 1
-				local _regex='^[0-9]+$';if [[ -n "$_regex" ]] && [[ ! "$2" =~ $_regex ]]; then die "lines does not match pattern: $_regex"; fi; _arg_lines="$2"
-				shift
-				;;
-			--lines=*)
-			    local _regex='^[0-9]+$';if [[ -n "$_regex" ]] && [[ ! "${1##--lines=}" =~ $_regex ]]; then die "lines does not match pattern: $_regex"; fi;
-				_arg_lines="${1##--lines=}"
-				;;
-			-n*)
-			      local _regex='^[0-9]+$';if [[ -n "$_regex" ]] && [[ ! "${1##-n}" =~ $_regex ]]; then die "lines does not match pattern: $_regex"; fi;
-				_arg_lines="${1##-n}"
-				;;
-			
 			-d|--base-dir)
 				test $# -lt 2 && die "Missing value for the option: '$_key'" 1
 				_arg_base_dir="$2"
@@ -146,12 +127,6 @@ parse_commandline()
 				_arg_base_dir="${1##-d}"
 				;;
 			
-			-f|--follow)
-				_arg_follow="on"
-				;;
-			--no-follow)
-				_arg_follow="off"
-				;;
 			-v|--verbose)
 				_arg_verbose="on"
 				;;
@@ -196,13 +171,13 @@ parse_commandline()
 
 handle_passed_args_count()
 {
-	local _required_args_string="name"
-	if [ "${_positionals_count}" -gt 1 ] && [ "$_helpHasBeenPrinted" == "1" ];then
-		_PRINT_HELP=yes die "FATAL ERROR: There were spurious positional arguments --- we expect at most 1 (namely: $_required_args_string), but got ${_positionals_count} (the last one was: '${_last_positional}').
+	local _required_args_string=""
+	if [ "${_positionals_count}" -gt 0 ] && [ "$_helpHasBeenPrinted" == "1" ];then
+		_PRINT_HELP=yes die "FATAL ERROR: There were spurious positional arguments --- we expect at most 0 (namely: $_required_args_string), but got ${_positionals_count} (the last one was: '${_last_positional}').
 	${_positionals[*]}" 1
 	fi
-	if [ "${_positionals_count}" -lt 1 ] && [ "$_helpHasBeenPrinted" == "1" ];then
-		_PRINT_HELP=yes die "FATAL ERROR: Not enough positional arguments - we require at least 1 (namely: $_required_args_string), but got only ${_positionals_count}.
+	if [ "${_positionals_count}" -lt 0 ] && [ "$_helpHasBeenPrinted" == "1" ];then
+		_PRINT_HELP=yes die "FATAL ERROR: Not enough positional arguments - we require at least 0 (namely: $_required_args_string), but got only ${_positionals_count}.
 	${_positionals[*]}" 1;
 	fi
 }
@@ -211,7 +186,7 @@ handle_passed_args_count()
 assign_positional_args()
 {
 	local _positional_name _shift_for=$1;
-	_positional_names="_arg_name ";
+	_positional_names="";
 	shift "$_shift_for"
 	for _positional_name in ${_positional_names};do
 		test $# -gt 0 || break;
@@ -232,10 +207,7 @@ print_debug()
 	# shellcheck disable=SC2145
 	echo "DEBUG: $0 $@";
 	
-	echo -e "	name: ${_arg_name}";
-	echo -e "	lines: ${_arg_lines}";
 	echo -e "	base-dir: ${_arg_base_dir}";
-	echo -e "	follow: ${_arg_follow}";
 	echo -e "	verbose: ${_arg_verbose}";
 
 }
@@ -258,29 +230,90 @@ trap on_interrupt INT;
 # print_debug "$@"
 # @parseArger-end
 
-MOLT_NAME="$_arg_name"
 BASE_DIR="$_arg_base_dir"
-MOLT_HOME="$BASE_DIR/$MOLT_NAME"
-LINES="$_arg_lines"
 
-# Check if molt exists
-if [ ! -d "$MOLT_HOME" ]; then
-  die "Molt '$MOLT_NAME' not found at $MOLT_HOME" 1
+if [ ! -d "$BASE_DIR" ]; then
+  die "Base directory not found: $BASE_DIR" 1
 fi
 
-# Find log file
-LOG_FILE="$MOLT_HOME/.openclaw/gateway.log"
+# Header
+echo "========================================"
+echo "           MOLT REGISTRY"
+echo "========================================"
+echo ""
 
-if [ ! -f "$LOG_FILE" ]; then
-  die "Log file not found: $LOG_FILE" 1
-fi
+# Count molts
+MOLT_COUNT=0
+RUNNING_COUNT=0
+STOPPED_COUNT=0
 
-log "Showing logs for molt '$MOLT_NAME'" 1
+# Iterate through directories
+for molt_dir in "$BASE_DIR"/*/; do
+  [ -d "$molt_dir" ] || continue
+  
+  # Check if it's a molt (has .molt-info file)
+  if [ -f "$molt_dir/.molt-info" ]; then
+    MOLT_COUNT=$((MOLT_COUNT + 1))
+    
+    # Load molt info
+    source "$molt_dir/.molt-info"
+    MOLT_NAME=$(basename "$molt_dir")
+    
+    # Get port from config
+    CONFIG_FILE="$molt_dir/.openclaw/openclaw.json"
+    if [ -f "$CONFIG_FILE" ]; then
+      MOLT_PORT=$(grep -o '"port":[[:space:]]*[0-9]*' "$CONFIG_FILE" 2>/dev/null | grep -o '[0-9]*$' || echo "unknown")
+    fi
+    
+    # Check status
+    PID_FILE="$molt_dir/.openclaw/gateway.pid"
+    STATUS="stopped"
+    PID=""
+    
+    if [ -f "$PID_FILE" ]; then
+      PID=$(cat "$PID_FILE")
+      if ps -p "$PID" > /dev/null 2>&1; then
+        STATUS="running"
+        RUNNING_COUNT=$((RUNNING_COUNT + 1))
+      else
+        STATUS="stale"
+        STOPPED_COUNT=$((STOPPED_COUNT + 1))
+      fi
+    else
+      # Check for orphan processes
+      ORPHAN_PID=$(pgrep -u "$MOLT_NAME" -f "openclaw.*gateway" 2>/dev/null | head -1 || echo "")
+      if [ -n "$ORPHAN_PID" ]; then
+        STATUS="running*"
+        PID="$ORPHAN_PID"
+        RUNNING_COUNT=$((RUNNING_COUNT + 1))
+      else
+        STOPPED_COUNT=$((STOPPED_COUNT + 1))
+      fi
+    fi
+    
+    # Display molt info
+    echo "Molt:      $MOLT_NAME"
+    echo "Port:      ${MOLT_PORT:-unknown}"
+    echo "Home:      $molt_dir"
+    echo "Status:    $STATUS ${PID:+($PID)}"
+    
+    if [ "$_arg_verbose" = "on" ]; then
+      echo "User:      $MOLT_NAME"
+      if id "$MOLT_NAME" &>/dev/null; then
+        echo "Docker:    $(id -nG "$MOLT_NAME" 2>/dev/null | grep -qw "docker" && echo "yes" || echo "no")"
+      fi
+      echo "Created:   ${CREATED:-unknown}"
+    fi
+    
+    echo "----------------------------------------"
+  fi
+done
 
-if [ "$_arg_follow" = "on" ]; then
-  # Follow mode
-  tail -f "$LOG_FILE"
-else
-  # Show last N lines
-  tail -n "$LINES" "$LOG_FILE"
+echo ""
+echo "Summary: $MOLT_COUNT molts total ($RUNNING_COUNT running, $STOPPED_COUNT stopped)"
+echo ""
+
+if [ $MOLT_COUNT -eq 0 ]; then
+  echo "No molts found. Create one with:"
+  echo "  ${0%/*}/create-molt <name>"
 fi

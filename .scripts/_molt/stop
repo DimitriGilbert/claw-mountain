@@ -1,6 +1,6 @@
 #!/bin/bash
 # @parseArger-begin
-# @parseArger-help "Completely remove a molt (user, home directory, processes)" --option "help" --short-option "h"
+# @parseArger-help "Stop a running molt (OpenClaw bot) gateway" --option "help" --short-option "h"
 # @parseArger-verbose --option "verbose" --level "0" --quiet-option "quiet"
 _has_colors=0
 if [ -t 1 ]; then # Check if stdout is a terminal
@@ -10,10 +10,9 @@ if [ -t 1 ]; then # Check if stdout is a terminal
 	fi
 fi
 # @parseArger-declarations
-# @parseArger pos name "Molt name to delete"
+# @parseArger pos name "Molt name to stop"
 # @parseArger opt base-dir "Base directory for molts" --short d --default-value "/home/didi/molts" --complete "directory"
-# @parseArger flag force "Skip confirmation prompt"
-# @parseArger flag keep-home "Keep home directory (only remove user)"
+# @parseArger flag force "Force kill if graceful stop fails" --short f
 # @parseArger flag verbose "Enable verbose output" --short v
 # @parseArger-declarations-end
 
@@ -50,10 +49,13 @@ _positionals=();
 _optional_positionals=();
 _arg_name="";
 # OPTIONALS ARGUMENTS
-_arg_base_dir="/home/didi/molts"
+# Detect base directory (where clmnt is located)
+_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+# Go up two levels: .scripts/_molt/ -> .scripts/ -> project root
+PROJECT_ROOT="$(cd "$_SCRIPT_DIR/../.." && pwd)"
+_arg_base_dir="$PROJECT_ROOT"
 # FLAGS
 _arg_force="off"
-_arg_keep_home="off"
 _arg_verbose="off"
 # NESTED
 _verbose_level="0";
@@ -66,14 +68,13 @@ print_help()
 
 	if [[ "$_helpHasBeenPrinted" == "1" ]]; then
 		_helpHasBeenPrinted=0;
-		echo -e "Completely remove a molt (user, home directory, processes):"
-	echo -e "	name: Molt name to delete"
-	echo -e "	-d, --base-dir <base-dir>: Base directory for molts [default: ' /home/didi/molts ']"
-	echo -e "	--force|--no-force: Skip confirmation prompt"
-	echo -e "	--keep-home|--no-keep-home: Keep home directory (only remove user)"
+		echo -e "Stop a running molt (OpenClaw bot) gateway:"
+	echo -e "	name: Molt name to stop"
+	echo -e "	-d, --base-dir <base-dir>: Base directory for molts [default: '<auto-detected>']"
+	echo -e "	-f|--force|--no-force: Force kill if graceful stop fails"
 	echo -e "	-v|--verbose|--no-verbose: Enable verbose output"
 	echo -e "Usage :
-	$0 <name> [--base-dir <value>] [--[no-]force] [--[no-]keep-home] [--[no-]verbose]";
+	$0 <name> [--base-dir <value>] [--[no-]force] [--[no-]verbose]";
 	fi
 
 }
@@ -132,17 +133,11 @@ parse_commandline()
 				_arg_base_dir="${1##-d}"
 				;;
 			
-			--force)
+			-f|--force)
 				_arg_force="on"
 				;;
 			--no-force)
 				_arg_force="off"
-				;;
-			--keep-home)
-				_arg_keep_home="on"
-				;;
-			--no-keep-home)
-				_arg_keep_home="off"
 				;;
 			-v|--verbose)
 				_arg_verbose="on"
@@ -227,7 +222,6 @@ print_debug()
 	echo -e "	name: ${_arg_name}";
 	echo -e "	base-dir: ${_arg_base_dir}";
 	echo -e "	force: ${_arg_force}";
-	echo -e "	keep-home: ${_arg_keep_home}";
 	echo -e "	verbose: ${_arg_verbose}";
 
 }
@@ -259,42 +253,77 @@ if [ ! -d "$MOLT_HOME" ]; then
   die "Molt '$MOLT_NAME' not found at $MOLT_HOME" 1
 fi
 
-# Confirmation prompt
-if [ "$_arg_force" = "off" ]; then
-  echo "WARNING: This will permanently delete molt '$MOLT_NAME'"
-  echo "Home directory: $MOLT_HOME"
-  if [ "$_arg_keep_home" = "off" ]; then
-    echo "This will remove the user AND delete the home directory"
+# Check if user exists
+if ! id "$MOLT_NAME" &>/dev/null; then
+  die "User '$MOLT_NAME' does not exist" 1
+fi
+
+OPENCLAW_DIR="$MOLT_HOME/.openclaw"
+PID_FILE="$OPENCLAW_DIR/gateway.pid"
+
+log "Stopping molt '$MOLT_NAME'..." 1
+
+# Try to stop via PID file first
+if [ -f "$PID_FILE" ]; then
+  PID=$(cat "$PID_FILE")
+  if ps -p "$PID" > /dev/null 2>&1; then
+    log "Stopping gateway (PID: $PID)..." 1
+    
+    # Try graceful shutdown first
+    sudo -u "$MOLT_NAME" kill -TERM "$PID" 2>/dev/null || true
+    
+    # Wait for process to exit
+    for i in 1 2 3 4 5; do
+      if ! ps -p "$PID" > /dev/null 2>&1; then
+        log "Molt stopped gracefully" 1
+        rm -f "$PID_FILE"
+        exit 0
+      fi
+      sleep 1
+    done
+    
+    # Force kill if requested
+    if [ "$_arg_force" = "on" ]; then
+      log "Force killing process..." -1
+      sudo -u "$MOLT_NAME" kill -KILL "$PID" 2>/dev/null || true
+      sleep 1
+      if ! ps -p "$PID" > /dev/null 2>&1; then
+        log "Molt stopped forcefully" 1
+        rm -f "$PID_FILE"
+        exit 0
+      fi
+    else
+      log "Process still running. Use --force to force kill" -1
+      exit 1
+    fi
   else
-    echo "This will remove the user but KEEP the home directory"
-  fi
-  echo ""
-  read -p "Are you sure? Type 'yes' to confirm: " confirm
-  if [ "$confirm" != "yes" ]; then
-    log "Deletion cancelled" 1
-    exit 0
+    log "Stale PID file found, cleaning up" -1
+    rm -f "$PID_FILE"
   fi
 fi
 
-# Stop any running processes
-log "Stopping any running processes for $MOLT_NAME..." 1
-${0%/*}/molt-stop "$MOLT_NAME" -d "$BASE_DIR" --force 2>/dev/null || true
-
-# Kill any remaining browser processes
-pkill -u "$MOLT_NAME" -f "firefox|chrome|chromium|brave" 2>/dev/null || true
-
-# Remove user
-if id "$MOLT_NAME" &>/dev/null; then
-  log "Removing user '$MOLT_NAME'..." 1
-  sudo userdel "$MOLT_NAME" || die "Failed to remove user" 1
-fi
-
-# Remove home directory (unless --keep-home)
-if [ "$_arg_keep_home" = "off" ]; then
-  if [ -d "$MOLT_HOME" ]; then
-    log "Removing home directory: $MOLT_HOME" 1
-    sudo rm -rf "$MOLT_HOME" || die "Failed to remove home directory" 1
+# Try to find and stop process by name
+PID=$(pgrep -u "$MOLT_NAME" -f "openclaw.*gateway" | head -1 || echo "")
+if [ -n "$PID" ]; then
+  log "Found gateway process (PID: $PID), stopping..." 1
+  sudo -u "$MOLT_NAME" kill -TERM "$PID" 2>/dev/null || true
+  sleep 2
+  
+  if ! ps -p "$PID" > /dev/null 2>&1; then
+    log "Molt stopped successfully" 1
+  elif [ "$_arg_force" = "on" ]; then
+    sudo -u "$MOLT_NAME" kill -KILL "$PID" 2>/dev/null || true
+    sleep 1
+    if ! ps -p "$PID" > /dev/null 2>&1; then
+      log "Molt stopped forcefully" 1
+    else
+      die "Failed to stop molt '$MOLT_NAME'" 1
+    fi
+  else
+    die "Failed to stop molt gracefully. Use --force" 1
   fi
+else
+  log "No running gateway found for molt '$MOLT_NAME'" -1
 fi
 
-log "Molt '$MOLT_NAME' has been deleted" 1
+rm -f "$PID_FILE"

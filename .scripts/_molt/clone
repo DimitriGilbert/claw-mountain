@@ -53,7 +53,11 @@ _arg_source="";
 _arg_target="";
 # OPTIONALS ARGUMENTS
 _arg_port=
-_arg_base_dir="/home/didi/molts"
+# Detect base directory (where clmnt is located)
+_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+# Go up two levels: .scripts/_molt/ -> .scripts/ -> project root
+PROJECT_ROOT="$(cd "$_SCRIPT_DIR/../.." && pwd)"
+_arg_base_dir="$PROJECT_ROOT"
 # FLAGS
 _arg_skip_onboard="off"
 _arg_verbose="off"
@@ -72,7 +76,7 @@ print_help()
 	echo -e "	source: Source molt name"
 	echo -e "	target: Target molt name"
 	echo -e "	-p, --port <port>: Gateway port for new molt (auto-assign if not provided)"
-	echo -e "	-d, --base-dir <base-dir>: Base directory for molts [default: ' /home/didi/molts ']"
+	echo -e "	-d, --base-dir <base-dir>: Base directory for molts [default: '<auto-detected>']"
 	echo -e "	--skip-onboard|--no-skip-onboard: Skip OpenClaw onboarding (manual setup required)"
 	echo -e "	-v|--verbose|--no-verbose: Enable verbose output"
 	echo -e "Usage :

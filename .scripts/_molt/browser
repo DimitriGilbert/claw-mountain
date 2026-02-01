@@ -56,7 +56,11 @@ _arg_browser="firefox"
 _one_of_arg_browser=("firefox" "chromium" "chrome" "brave" );
 _arg_profile_dir=
 _arg_url=
-_arg_base_dir="/home/didi/molts"
+# Detect base directory (where clmnt is located)
+_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+# Go up two levels: .scripts/_molt/ -> .scripts/ -> project root
+PROJECT_ROOT="$(cd "$_SCRIPT_DIR/../.." && pwd)"
+_arg_base_dir="$PROJECT_ROOT"
 # FLAGS
 _arg_headless="off"
 _arg_verbose="off"
@@ -76,7 +80,7 @@ print_help()
 	echo -e "	-b, --browser <browser>: Browser to launch [default: ' firefox '] [one of 'firefox' 'chromium' 'chrome' 'brave']"
 	echo -e "	-p, --profile-dir <profile-dir>: Custom profile directory"
 	echo -e "	-u, --url <url>: URL to open"
-	echo -e "	-d, --base-dir <base-dir>: Base directory for molts [default: ' /home/didi/molts ']"
+	echo -e "	-d, --base-dir <base-dir>: Base directory for molts [default: '<auto-detected>']"
 	echo -e "	--headless|--no-headless: Run in headless mode (no GUI)"
 	echo -e "	-v|--verbose|--no-verbose: Enable verbose output"
 	echo -e "Usage :

@@ -1,6 +1,6 @@
 #!/bin/bash
 # @parseArger-begin
-# @parseArger-help "Check the running status of a molt (OpenClaw bot)" --option "help" --short-option "h"
+# @parseArger-help "Start a molt (OpenClaw bot) gateway" --option "help" --short-option "h"
 # @parseArger-verbose --option "verbose" --level "0" --quiet-option "quiet"
 _has_colors=0
 if [ -t 1 ]; then # Check if stdout is a terminal
@@ -10,8 +10,10 @@ if [ -t 1 ]; then # Check if stdout is a terminal
 	fi
 fi
 # @parseArger-declarations
-# @parseArger pos name "Molt name to check status for"
+# @parseArger pos name "Molt name to start"
 # @parseArger opt base-dir "Base directory for molts" --short d --default-value "/home/didi/molts" --complete "directory"
+# @parseArger opt port "Override gateway port" --short p
+# @parseArger flag daemon "Run as background daemon (systemd/user service)"
 # @parseArger flag verbose "Enable verbose output" --short v
 # @parseArger-declarations-end
 
@@ -48,8 +50,14 @@ _positionals=();
 _optional_positionals=();
 _arg_name="";
 # OPTIONALS ARGUMENTS
-_arg_base_dir="/home/didi/molts"
+# Detect base directory (where clmnt is located)
+_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+# Go up two levels: .scripts/_molt/ -> .scripts/ -> project root
+PROJECT_ROOT="$(cd "$_SCRIPT_DIR/../.." && pwd)"
+_arg_base_dir="$PROJECT_ROOT"
+_arg_port=
 # FLAGS
+_arg_daemon="off"
 _arg_verbose="off"
 # NESTED
 _verbose_level="0";
@@ -62,12 +70,14 @@ print_help()
 
 	if [[ "$_helpHasBeenPrinted" == "1" ]]; then
 		_helpHasBeenPrinted=0;
-		echo -e "Check the running status of a molt (OpenClaw bot):"
-	echo -e "	name: Molt name to check status for"
-	echo -e "	-d, --base-dir <base-dir>: Base directory for molts [default: ' /home/didi/molts ']"
+		echo -e "Start a molt (OpenClaw bot) gateway:"
+	echo -e "	name: Molt name to start"
+	echo -e "	-d, --base-dir <base-dir>: Base directory for molts [default: '<auto-detected>']"
+	echo -e "	-p, --port <port>: Override gateway port"
+	echo -e "	--daemon|--no-daemon: Run as background daemon (systemd/user service)"
 	echo -e "	-v|--verbose|--no-verbose: Enable verbose output"
 	echo -e "Usage :
-	$0 <name> [--base-dir <value>] [--[no-]verbose]";
+	$0 <name> [--base-dir <value>] [--port <value>] [--[no-]daemon] [--[no-]verbose]";
 	fi
 
 }
@@ -126,6 +136,26 @@ parse_commandline()
 				_arg_base_dir="${1##-d}"
 				;;
 			
+			-p|--port)
+				test $# -lt 2 && die "Missing value for the option: '$_key'" 1
+				local _regex='^[0-9]+$';if [[ -n "$_regex" ]] && [[ ! "$2" =~ $_regex ]]; then die "port does not match pattern: $_regex"; fi; _arg_port="$2"
+				shift
+				;;
+			--port=*)
+			    local _regex='^[0-9]+$';if [[ -n "$_regex" ]] && [[ ! "${1##--port=}" =~ $_regex ]]; then die "port does not match pattern: $_regex"; fi;
+				_arg_port="${1##--port=}"
+				;;
+			-p*)
+			      local _regex='^[0-9]+$';if [[ -n "$_regex" ]] && [[ ! "${1##-p}" =~ $_regex ]]; then die "port does not match pattern: $_regex"; fi;
+				_arg_port="${1##-p}"
+				;;
+			
+			--daemon)
+				_arg_daemon="on"
+				;;
+			--no-daemon)
+				_arg_daemon="off"
+				;;
 			-v|--verbose)
 				_arg_verbose="on"
 				;;
@@ -208,6 +238,8 @@ print_debug()
 	
 	echo -e "	name: ${_arg_name}";
 	echo -e "	base-dir: ${_arg_base_dir}";
+	echo -e "	port: ${_arg_port}";
+	echo -e "	daemon: ${_arg_daemon}";
 	echo -e "	verbose: ${_arg_verbose}";
 
 }
@@ -239,76 +271,80 @@ if [ ! -d "$MOLT_HOME" ]; then
   die "Molt '$MOLT_NAME' not found at $MOLT_HOME" 1
 fi
 
-# Load molt info
-if [ -f "$MOLT_HOME/.molt-info" ]; then
-  source "$MOLT_HOME/.molt-info"
+# Check if user exists
+if ! id "$MOLT_NAME" &>/dev/null; then
+  die "User '$MOLT_NAME' does not exist" 1
 fi
 
-# Determine port
+# Load configuration
 OPENCLAW_DIR="$MOLT_HOME/.openclaw"
 CONFIG_FILE="$OPENCLAW_DIR/openclaw.json"
-if [ -f "$CONFIG_FILE" ]; then
-  MOLT_PORT=$(grep -o '"port":[[:space:]]*[0-9]*' "$CONFIG_FILE" 2>/dev/null | grep -o '[0-9]*$' || echo "${MOLT_PORT:-unknown}")
-fi
-
-echo "Molt: $MOLT_NAME"
-echo "Home: $MOLT_HOME"
-echo "Port: ${MOLT_PORT:-unknown}"
-echo ""
-
-# Check if user exists
-if id "$MOLT_NAME" &>/dev/null; then
-  echo "User: exists"
-else
-  echo "User: NOT FOUND"
-fi
-
-# Check docker group membership
-if id -nG "$MOLT_NAME" 2>/dev/null | grep -qw "docker"; then
-  echo "Docker: yes"
-else
-  echo "Docker: no"
-fi
-
-# Check if OpenClaw gateway is running
 PID_FILE="$OPENCLAW_DIR/gateway.pid"
+
+if [ ! -f "$CONFIG_FILE" ]; then
+  die "OpenClaw config not found at $CONFIG_FILE" 1
+fi
+
+# Get port from config or override
+if [ -n "$_arg_port" ]; then
+  MOLT_PORT="$_arg_port"
+else
+  MOLT_PORT=$(grep -o '"port":[[:space:]]*[0-9]*' "$CONFIG_FILE" 2>/dev/null | grep -o '[0-9]*$' || echo "19001")
+fi
+
+# Check if already running
 if [ -f "$PID_FILE" ]; then
-  PID=$(cat "$PID_FILE")
-  if ps -p "$PID" > /dev/null 2>&1; then
-    echo "Status: RUNNING (PID: $PID)"
-    
-    # Try to get health status
-    if command -v openclaw >/dev/null 2>&1; then
-      export OPENCLAW_CONFIG_PATH="$CONFIG_FILE"
-      export OPENCLAW_STATE_DIR="$OPENCLAW_DIR"
-      HEALTH=$(sudo -u "$MOLT_NAME" openclaw health 2>&1 || echo "unavailable")
-      echo "Health: $HEALTH"
-    fi
-  else
-    echo "Status: STOPPED (stale PID file)"
-    rm -f "$PID_FILE"
-  fi
-else
-  # Check for running process by other means
-  PID=$(pgrep -u "$MOLT_NAME" -f "openclaw.*gateway" | head -1 || echo "")
-  if [ -n "$PID" ]; then
-    echo "Status: RUNNING (PID: $PID)"
-    echo $PID > "$PID_FILE"
-  else
-    echo "Status: STOPPED"
+  OLD_PID=$(sudo cat "$PID_FILE")
+  if ps -p "$OLD_PID" > /dev/null 2>&1; then
+    die "Molt '$MOLT_NAME' is already running (PID: $OLD_PID)" 1
   fi
 fi
 
-# Check configuration
-if [ -f "$CONFIG_FILE" ]; then
-  echo "Config: present"
-else
-  echo "Config: MISSING"
+# Check for orphan processes
+ORPHAN_PID=$(pgrep -u "$MOLT_NAME" -f "openclaw.*gateway" | head -1 || echo "")
+if [ -n "$ORPHAN_PID" ]; then
+  log "Found orphan gateway process (PID: $ORPHAN_PID), stopping it first" -1
+  sudo -u "$MOLT_NAME" kill "$ORPHAN_PID" 2>/dev/null || true
+  sleep 2
 fi
 
-# Check workspace
-if [ -d "$OPENCLAW_DIR/workspace" ]; then
-  echo "Workspace: present"
+log "Starting molt '$MOLT_NAME' on port $MOLT_PORT" 1
+
+# Set up environment
+export OPENCLAW_CONFIG_PATH="$CONFIG_FILE"
+export OPENCLAW_STATE_DIR="$OPENCLAW_DIR"
+
+# Start OpenClaw gateway
+if [ "$_arg_daemon" = "on" ]; then
+  # Run as daemon/service
+  log "Starting as daemon..." 1
+  sudo -u "$MOLT_NAME" bash -c "
+    export OPENCLAW_CONFIG_PATH='$CONFIG_FILE'
+    export OPENCLAW_STATE_DIR='$OPENCLAW_DIR'
+    nohup openclaw gateway --port $MOLT_PORT > $OPENCLAW_DIR/gateway.log 2>&1 &
+    echo \$! > '$PID_FILE'
+  "
 else
-  echo "Workspace: MISSING"
+  # Run in foreground (or background but trackable)
+  log "Starting gateway..." 1
+  sudo -u "$MOLT_NAME" bash -c "
+    export OPENCLAW_CONFIG_PATH='$CONFIG_FILE'
+    export OPENCLAW_STATE_DIR='$OPENCLAW_DIR'
+    openclaw gateway --port $MOLT_PORT > '$OPENCLAW_DIR/gateway.log' 2>&1 &
+    echo \$! > '$PID_FILE'
+  "
+fi
+
+# Wait a moment and check if it started
+sleep 2
+if [ -f "$PID_FILE" ]; then
+  NEW_PID=$(cat "$PID_FILE")
+  if ps -p "$NEW_PID" > /dev/null 2>&1; then
+    log "Molt '$MOLT_NAME' started successfully (PID: $NEW_PID)" 1
+    log "Dashboard: http://127.0.0.1:$MOLT_PORT/" 1
+  else
+    die "Failed to start molt '$MOLT_NAME' - check $OPENCLAW_DIR/gateway.log" 1
+  fi
+else
+  die "Failed to start molt '$MOLT_NAME' - PID file not created" 1
 fi

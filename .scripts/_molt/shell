@@ -48,7 +48,11 @@ _positionals=();
 _optional_positionals=();
 _arg_name="";
 # OPTIONALS ARGUMENTS
-_arg_base_dir="/home/didi/molts"
+# Detect base directory (where clmnt is located)
+_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+# Go up two levels: .scripts/_molt/ -> .scripts/ -> project root
+PROJECT_ROOT="$(cd "$_SCRIPT_DIR/../.." && pwd)"
+_arg_base_dir="$PROJECT_ROOT"
 # FLAGS
 _arg_verbose="off"
 # NESTED
@@ -64,7 +68,7 @@ print_help()
 		_helpHasBeenPrinted=0;
 		echo -e "Open an interactive shell as a molt user:"
 	echo -e "	name: Molt name"
-	echo -e "	-d, --base-dir <base-dir>: Base directory for molts [default: ' /home/didi/molts ']"
+	echo -e "	-d, --base-dir <base-dir>: Base directory for molts [default: '<auto-detected>']"
 	echo -e "	-v|--verbose|--no-verbose: Enable verbose output"
 	echo -e "Usage :
 	$0 <name> [--base-dir <value>] [--[no-]verbose]";

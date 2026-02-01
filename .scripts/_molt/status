@@ -1,6 +1,6 @@
 #!/bin/bash
 # @parseArger-begin
-# @parseArger-help "Stop a running molt (OpenClaw bot) gateway" --option "help" --short-option "h"
+# @parseArger-help "Check the running status of a molt (OpenClaw bot)" --option "help" --short-option "h"
 # @parseArger-verbose --option "verbose" --level "0" --quiet-option "quiet"
 _has_colors=0
 if [ -t 1 ]; then # Check if stdout is a terminal
@@ -10,9 +10,8 @@ if [ -t 1 ]; then # Check if stdout is a terminal
 	fi
 fi
 # @parseArger-declarations
-# @parseArger pos name "Molt name to stop"
+# @parseArger pos name "Molt name to check status for"
 # @parseArger opt base-dir "Base directory for molts" --short d --default-value "/home/didi/molts" --complete "directory"
-# @parseArger flag force "Force kill if graceful stop fails" --short f
 # @parseArger flag verbose "Enable verbose output" --short v
 # @parseArger-declarations-end
 
@@ -49,9 +48,12 @@ _positionals=();
 _optional_positionals=();
 _arg_name="";
 # OPTIONALS ARGUMENTS
-_arg_base_dir="/home/didi/molts"
+# Detect base directory (where clmnt is located)
+_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+# Go up two levels: .scripts/_molt/ -> .scripts/ -> project root
+PROJECT_ROOT="$(cd "$_SCRIPT_DIR/../.." && pwd)"
+_arg_base_dir="$PROJECT_ROOT"
 # FLAGS
-_arg_force="off"
 _arg_verbose="off"
 # NESTED
 _verbose_level="0";
@@ -64,13 +66,12 @@ print_help()
 
 	if [[ "$_helpHasBeenPrinted" == "1" ]]; then
 		_helpHasBeenPrinted=0;
-		echo -e "Stop a running molt (OpenClaw bot) gateway:"
-	echo -e "	name: Molt name to stop"
-	echo -e "	-d, --base-dir <base-dir>: Base directory for molts [default: ' /home/didi/molts ']"
-	echo -e "	-f|--force|--no-force: Force kill if graceful stop fails"
+		echo -e "Check the running status of a molt (OpenClaw bot):"
+	echo -e "	name: Molt name to check status for"
+	echo -e "	-d, --base-dir <base-dir>: Base directory for molts [default: '<auto-detected>']"
 	echo -e "	-v|--verbose|--no-verbose: Enable verbose output"
 	echo -e "Usage :
-	$0 <name> [--base-dir <value>] [--[no-]force] [--[no-]verbose]";
+	$0 <name> [--base-dir <value>] [--[no-]verbose]";
 	fi
 
 }
@@ -129,12 +130,6 @@ parse_commandline()
 				_arg_base_dir="${1##-d}"
 				;;
 			
-			-f|--force)
-				_arg_force="on"
-				;;
-			--no-force)
-				_arg_force="off"
-				;;
 			-v|--verbose)
 				_arg_verbose="on"
 				;;
@@ -217,7 +212,6 @@ print_debug()
 	
 	echo -e "	name: ${_arg_name}";
 	echo -e "	base-dir: ${_arg_base_dir}";
-	echo -e "	force: ${_arg_force}";
 	echo -e "	verbose: ${_arg_verbose}";
 
 }
@@ -249,77 +243,76 @@ if [ ! -d "$MOLT_HOME" ]; then
   die "Molt '$MOLT_NAME' not found at $MOLT_HOME" 1
 fi
 
-# Check if user exists
-if ! id "$MOLT_NAME" &>/dev/null; then
-  die "User '$MOLT_NAME' does not exist" 1
+# Load molt info
+if [ -f "$MOLT_HOME/.molt-info" ]; then
+  source "$MOLT_HOME/.molt-info"
 fi
 
+# Determine port
 OPENCLAW_DIR="$MOLT_HOME/.openclaw"
+CONFIG_FILE="$OPENCLAW_DIR/openclaw.json"
+if sudo test -f "$CONFIG_FILE"; then
+  MOLT_PORT=$(sudo grep -o '"port":[[:space:]]*[0-9]*' "$CONFIG_FILE" 2>/dev/null | sudo grep -o '[0-9]*$' || echo "${MOLT_PORT:-unknown}")
+fi
+
+echo "Molt: $MOLT_NAME"
+echo "Home: $MOLT_HOME"
+echo "Port: ${MOLT_PORT:-unknown}"
+echo ""
+
+# Check if user exists
+if id "$MOLT_NAME" &>/dev/null; then
+  echo "User: exists"
+else
+  echo "User: NOT FOUND"
+fi
+
+# Check docker group membership
+if id -nG "$MOLT_NAME" 2>/dev/null | grep -qw "docker"; then
+  echo "Docker: yes"
+else
+  echo "Docker: no"
+fi
+
+# Check if OpenClaw gateway is running
 PID_FILE="$OPENCLAW_DIR/gateway.pid"
-
-log "Stopping molt '$MOLT_NAME'..." 1
-
-# Try to stop via PID file first
 if [ -f "$PID_FILE" ]; then
   PID=$(cat "$PID_FILE")
   if ps -p "$PID" > /dev/null 2>&1; then
-    log "Stopping gateway (PID: $PID)..." 1
+    echo "Status: RUNNING (PID: $PID)"
     
-    # Try graceful shutdown first
-    sudo -u "$MOLT_NAME" kill -TERM "$PID" 2>/dev/null || true
-    
-    # Wait for process to exit
-    for i in 1 2 3 4 5; do
-      if ! ps -p "$PID" > /dev/null 2>&1; then
-        log "Molt stopped gracefully" 1
-        rm -f "$PID_FILE"
-        exit 0
-      fi
-      sleep 1
-    done
-    
-    # Force kill if requested
-    if [ "$_arg_force" = "on" ]; then
-      log "Force killing process..." -1
-      sudo -u "$MOLT_NAME" kill -KILL "$PID" 2>/dev/null || true
-      sleep 1
-      if ! ps -p "$PID" > /dev/null 2>&1; then
-        log "Molt stopped forcefully" 1
-        rm -f "$PID_FILE"
-        exit 0
-      fi
-    else
-      log "Process still running. Use --force to force kill" -1
-      exit 1
+    # Try to get health status
+    if command -v openclaw >/dev/null 2>&1; then
+      export OPENCLAW_CONFIG_PATH="$CONFIG_FILE"
+      export OPENCLAW_STATE_DIR="$OPENCLAW_DIR"
+      HEALTH=$(sudo -u "$MOLT_NAME" openclaw health 2>&1 || echo "unavailable")
+      echo "Health: $HEALTH"
     fi
   else
-    log "Stale PID file found, cleaning up" -1
+    echo "Status: STOPPED (stale PID file)"
     rm -f "$PID_FILE"
   fi
-fi
-
-# Try to find and stop process by name
-PID=$(pgrep -u "$MOLT_NAME" -f "openclaw.*gateway" | head -1 || echo "")
-if [ -n "$PID" ]; then
-  log "Found gateway process (PID: $PID), stopping..." 1
-  sudo -u "$MOLT_NAME" kill -TERM "$PID" 2>/dev/null || true
-  sleep 2
-  
-  if ! ps -p "$PID" > /dev/null 2>&1; then
-    log "Molt stopped successfully" 1
-  elif [ "$_arg_force" = "on" ]; then
-    sudo -u "$MOLT_NAME" kill -KILL "$PID" 2>/dev/null || true
-    sleep 1
-    if ! ps -p "$PID" > /dev/null 2>&1; then
-      log "Molt stopped forcefully" 1
-    else
-      die "Failed to stop molt '$MOLT_NAME'" 1
-    fi
-  else
-    die "Failed to stop molt gracefully. Use --force" 1
-  fi
 else
-  log "No running gateway found for molt '$MOLT_NAME'" -1
+  # Check for running process by other means
+  PID=$(pgrep -u "$MOLT_NAME" -f "openclaw.*gateway" | head -1 || echo "")
+  if [ -n "$PID" ]; then
+    echo "Status: RUNNING (PID: $PID)"
+    echo $PID > "$PID_FILE"
+  else
+    echo "Status: STOPPED"
+  fi
 fi
 
-rm -f "$PID_FILE"
+# Check configuration
+if sudo test -f "$CONFIG_FILE"; then
+  echo "Config: present"
+else
+  echo "Config: MISSING"
+fi
+
+# Check workspace
+if sudo test -d "$OPENCLAW_DIR/workspace"; then
+  echo "Workspace: present"
+else
+  echo "Workspace: MISSING"
+fi

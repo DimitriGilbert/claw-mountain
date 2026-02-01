@@ -1,6 +1,6 @@
 #!/bin/bash
 # @parseArger-begin
-# @parseArger-help "Execute a command as a molt user" --option "help" --short-option "h"
+# @parseArger-help "Clmnt - CLI for managing OpenClaw bot instances (molts)" --option "help" --short-option "h"
 # @parseArger-verbose --option "verbose" --level "0" --quiet-option "quiet"
 # @parseArger-leftovers leftovers
 _has_colors=0
@@ -11,10 +11,7 @@ if [ -t 1 ]; then # Check if stdout is a terminal
 	fi
 fi
 # @parseArger-declarations
-# @parseArger pos name "Molt name"
-# @parseArger pos command "Command to execute"
-# @parseArger opt base-dir "Base directory for molts" --short d --default-value "/home/didi/molts" --complete "directory"
-# @parseArger flag verbose "Enable verbose output" --short v
+# @parseArger pos command "Command to run" --subcommand-directory ".scripts" --subcommand-run --subcommand-use-leftovers --subcommand --one-of "molt"
 # @parseArger-declarations-end
 
 # @parseArger-utils
@@ -48,12 +45,12 @@ begins_with_short_option()
 # POSITIONALS ARGUMENTS
 _positionals=();
 _optional_positionals=();
-_arg_name="";
 _arg_command="";
+_one_of_arg_command=("molt" );
+_arg_subcommand_arg="_arg_command";
+__subcommand=();
 # OPTIONALS ARGUMENTS
-_arg_base_dir="/home/didi/molts"
 # FLAGS
-_arg_verbose="off"
 # NESTED
 # LEFTOVERS
 _arg_leftovers=()
@@ -65,16 +62,24 @@ print_help()
 {
 	_triggerSCHelp=1;
 
+	if [ "$__cli_arg_count" -ge 2 ]; then
+		# echo "$0 sub command help
+	#"
+		_triggerSCHelp=0;
+		_helpHasBeenPrinted=0;
+	else
+	
+
 	if [[ "$_helpHasBeenPrinted" == "1" ]]; then
 		_helpHasBeenPrinted=0;
-		echo -e "Execute a command as a molt user:"
-	echo -e "	name: Molt name"
-	echo -e "	command: Command to execute"
-	echo -e "	-d, --base-dir <base-dir>: Base directory for molts [default: ' /home/didi/molts ']"
-	echo -e "	-v|--verbose|--no-verbose: Enable verbose output"
+		echo -e "Clmnt - CLI for managing OpenClaw bot instances (molts):"
+	echo -e "	command: Command to run [one of 'molt']"
 	echo -e "Usage :
-	$0 <name> <command> [--base-dir <value>] [--[no-]verbose]";
+	$0 <command>";
 	fi
+
+	fi
+	
 
 }
 
@@ -84,29 +89,29 @@ log() {
 	if [ "${_arg_level}" -le "${_verbose_level}" ]; then
 		case "$_arg_level" in
 			-3)
-				_arg_COLOR="\e[0;31m";
+				_arg_COLOR="[0;31m";
 				;;
 			-2)
-				_arg_COLOR="\e[0;33m";
+				_arg_COLOR="[0;33m";
 				;;
 			-1)
-				_arg_COLOR="\e[1;33m";
+				_arg_COLOR="[1;33m";
 				;;
 			1)
-				_arg_COLOR="\e[0;32m";
+				_arg_COLOR="[0;32m";
 				;;
 			2)
-				_arg_COLOR="\e[1;36m";
+				_arg_COLOR="[1;36m";
 				;;
 			3)
-				_arg_COLOR="\e[0;36m";
+				_arg_COLOR="[0;36m";
 				;;
 			*)
-				_arg_COLOR="\e[0m";
+				_arg_COLOR="[0m";
 				;;
 		esac
 		if [ "${_has_colors}" == "1" ]; then
-			echo -e "${_arg_COLOR}${_arg_msg}\e[0m";
+			echo -e "${_arg_COLOR}${_arg_msg}[0m";
 		else
 			echo "${_arg_msg}";
 		fi
@@ -120,31 +125,11 @@ parse_commandline()
 	do
 		_key="$1"
 		case "$_key" in
-			-d|--base-dir)
-				test $# -lt 2 && die "Missing value for the option: '$_key'" 1
-				_arg_base_dir="$2"
-				shift
-				;;
-			--base-dir=*)
-				_arg_base_dir="${1##--base-dir=}"
-				;;
-			-d*)
-				_arg_base_dir="${1##-d}"
-				;;
-			
-			-v|--verbose)
-				_arg_verbose="on"
-				;;
-			--no-verbose)
-				_arg_verbose="off"
-				;;
 			-h|--help)
 				print_help;
-				exit 0;
 				;;
 			-h*)
 				print_help;
-				exit 0;
 				;;
 			--verbose)
 				if [ $# -lt 2 ];then
@@ -176,9 +161,9 @@ parse_commandline()
 
 handle_passed_args_count()
 {
-	local _required_args_string="name command"
-	if [ "${_positionals_count}" -lt 2 ] && [ "$_helpHasBeenPrinted" == "1" ];then
-		_PRINT_HELP=yes die "FATAL ERROR: Not enough positional arguments - we require at least 2 (namely: $_required_args_string), but got only ${_positionals_count}.
+	local _required_args_string="command"
+	if [ "${_positionals_count}" -lt 1 ] && [ "$_helpHasBeenPrinted" == "1" ];then
+		_PRINT_HELP=yes die "FATAL ERROR: Not enough positional arguments - we require at least 1 (namely: $_required_args_string), but got only ${_positionals_count}.
 	${_positionals[*]}" 1;
 	fi
 }
@@ -187,8 +172,8 @@ handle_passed_args_count()
 assign_positional_args()
 {
 	local _positional_name _shift_for=$1;
-	_positional_names="_arg_name _arg_command ";
-	_leftovers_count=$((${#_positionals[@]} - 2))
+	_positional_names="_arg_command ";
+	_leftovers_count=$((${#_positionals[@]} - 1))
 	for ((ii = 0; ii < _leftovers_count; ii++));do
 		_positional_names="$_positional_names _arg_leftovers[$((ii + 0))]";
 	done
@@ -203,6 +188,20 @@ assign_positional_args()
 			if [ -n "$_regex" ]; then
 				[[ "${1}" =~ $_regex ]] || die "${_positional_name} does not match pattern: $_regex"
 			fi
+			
+			if [ "$_arg_subcommand_arg" == "$_positional_name" ];then
+				if [ -f ".scripts/${1}" ] && command -v ".scripts/${1}" > /dev/null 2>&1;then
+					__subcommand+=(".scripts/${1}");
+				elif [ -f "$_SCRIPT_DIR/.scripts/${1}" ] && command -v "$_SCRIPT_DIR/.scripts/${1}" > /dev/null 2>&1;then
+					__subcommand+=("$_SCRIPT_DIR/.scripts/${1}");
+				elif [[ ".scripts/" == $(basename "$_SCRIPT_DIR")* ]];then
+					cmdToSub="$(basename "$_SCRIPT_DIR")";
+					cmdsubDir=".scripts/";
+					__subcommand+=("$_SCRIPT_DIR${cmdsubDir#"${cmdToSub}"}${1}");
+				else
+					__subcommand+=("$_SCRIPT_DIR/.scripts/${1}");
+				fi
+			fi
 		fi
 		eval "$_positional_name=\${1}" || die "Error during argument parsing, possibly an ParseArger bug." 1;
 		shift;
@@ -215,10 +214,7 @@ print_debug()
 	# shellcheck disable=SC2145
 	echo "DEBUG: $0 $@";
 	
-	echo -e "	name: ${_arg_name}";
 	echo -e "	command: ${_arg_command}";
-	echo -e "	base-dir: ${_arg_base_dir}";
-	echo -e "	verbose: ${_arg_verbose}";
 	echo -e "	leftovers: ${_arg_leftovers[*]}";
 
 }
@@ -236,33 +232,15 @@ trap on_interrupt INT;
 
 
 
+__subcommand+=("${_arg_leftovers[@]}");
+if [ "$_triggerSCHelp" == "0" ];then
+	__subcommand+=("--help");
+fi
+if [ "$_verbose_level" -ne "0" ];then
+	__subcommand+=("--verbose" "$_verbose_level");
+fi
+"${__subcommand[@]}";
 
 # @parseArger-parsing-end
 # print_debug "$@"
 # @parseArger-end
-
-MOLT_NAME="$_arg_name"
-BASE_DIR="$_arg_base_dir"
-MOLT_HOME="$BASE_DIR/$MOLT_NAME"
-COMMAND="$_arg_command"
-
-# Check if molt exists
-if [ ! -d "$MOLT_HOME" ]; then
-  die "Molt '$MOLT_NAME' not found at $MOLT_HOME" 1
-fi
-
-# Check if user exists
-if ! id "$MOLT_NAME" &>/dev/null; then
-  die "User '$MOLT_NAME' does not exist" 1
-fi
-
-# Build full command with leftovers
-FULL_COMMAND="$COMMAND"
-if [ ${#_arg_leftovers[@]} -gt 0 ]; then
-  FULL_COMMAND="$FULL_COMMAND ${_arg_leftovers[*]}"
-fi
-
-log "Executing as $MOLT_NAME: $FULL_COMMAND" 1
-
-# Execute command as molt user
-sudo -u "$MOLT_NAME" bash -c "cd '$MOLT_HOME' && $FULL_COMMAND"

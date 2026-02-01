@@ -1,7 +1,8 @@
 #!/bin/bash
 # @parseArger-begin
-# @parseArger-help "Get dashboard URL for a molt (prints URL, optionally opens browser)" --option "help" --short-option "h"
+# @parseArger-help "Execute a command as a molt user" --option "help" --short-option "h"
 # @parseArger-verbose --option "verbose" --level "0" --quiet-option "quiet"
+# @parseArger-leftovers leftovers
 _has_colors=0
 if [ -t 1 ]; then # Check if stdout is a terminal
 	ncolors=$(tput colors 2>/dev/null)
@@ -11,9 +12,8 @@ if [ -t 1 ]; then # Check if stdout is a terminal
 fi
 # @parseArger-declarations
 # @parseArger pos name "Molt name"
-# @parseArger opt host "Host/IP address to use in URL" --short H --default-value "auto"
+# @parseArger pos command "Command to execute"
 # @parseArger opt base-dir "Base directory for molts" --short d --default-value "/home/didi/molts" --complete "directory"
-# @parseArger flag open "Open browser with the URL" --short o
 # @parseArger flag verbose "Enable verbose output" --short v
 # @parseArger-declarations-end
 
@@ -49,13 +49,18 @@ begins_with_short_option()
 _positionals=();
 _optional_positionals=();
 _arg_name="";
+_arg_command="";
 # OPTIONALS ARGUMENTS
-_arg_host="auto"
-_arg_base_dir="/home/didi/molts"
+# Detect base directory (where clmnt is located)
+_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+# Go up two levels: .scripts/_molt/ -> .scripts/ -> project root
+PROJECT_ROOT="$(cd "$_SCRIPT_DIR/../.." && pwd)"
+_arg_base_dir="$PROJECT_ROOT"
 # FLAGS
-_arg_open="off"
 _arg_verbose="off"
 # NESTED
+# LEFTOVERS
+_arg_leftovers=()
 _verbose_level="0";
 
 
@@ -66,14 +71,13 @@ print_help()
 
 	if [[ "$_helpHasBeenPrinted" == "1" ]]; then
 		_helpHasBeenPrinted=0;
-		echo -e "Get dashboard URL for a molt (prints URL, optionally opens browser):"
+		echo -e "Execute a command as a molt user:"
 	echo -e "	name: Molt name"
-	echo -e "	-H, --host <host>: Host/IP address to use in URL [default: ' auto ']"
-	echo -e "	-d, --base-dir <base-dir>: Base directory for molts [default: ' /home/didi/molts ']"
-	echo -e "	-o|--open|--no-open: Open browser with the URL"
+	echo -e "	command: Command to execute"
+	echo -e "	-d, --base-dir <base-dir>: Base directory for molts [default: '<auto-detected>']"
 	echo -e "	-v|--verbose|--no-verbose: Enable verbose output"
 	echo -e "Usage :
-	$0 <name> [--host <value>] [--base-dir <value>] [--[no-]open] [--[no-]verbose]";
+	$0 <name> <command> [--base-dir <value>] [--[no-]verbose]";
 	fi
 
 }
@@ -120,18 +124,6 @@ parse_commandline()
 	do
 		_key="$1"
 		case "$_key" in
-			-H|--host)
-				test $# -lt 2 && die "Missing value for the option: '$_key'" 1
-				_arg_host="$2"
-				shift
-				;;
-			--host=*)
-				_arg_host="${1##--host=}"
-				;;
-			-H*)
-				_arg_host="${1##-H}"
-				;;
-			
 			-d|--base-dir)
 				test $# -lt 2 && die "Missing value for the option: '$_key'" 1
 				_arg_base_dir="$2"
@@ -144,12 +136,6 @@ parse_commandline()
 				_arg_base_dir="${1##-d}"
 				;;
 			
-			-o|--open)
-				_arg_open="on"
-				;;
-			--no-open)
-				_arg_open="off"
-				;;
 			-v|--verbose)
 				_arg_verbose="on"
 				;;
@@ -194,13 +180,9 @@ parse_commandline()
 
 handle_passed_args_count()
 {
-	local _required_args_string="name"
-	if [ "${_positionals_count}" -gt 1 ] && [ "$_helpHasBeenPrinted" == "1" ];then
-		_PRINT_HELP=yes die "FATAL ERROR: There were spurious positional arguments --- we expect at most 1 (namely: $_required_args_string), but got ${_positionals_count} (the last one was: '${_last_positional}').
-	${_positionals[*]}" 1
-	fi
-	if [ "${_positionals_count}" -lt 1 ] && [ "$_helpHasBeenPrinted" == "1" ];then
-		_PRINT_HELP=yes die "FATAL ERROR: Not enough positional arguments - we require at least 1 (namely: $_required_args_string), but got only ${_positionals_count}.
+	local _required_args_string="name command"
+	if [ "${_positionals_count}" -lt 2 ] && [ "$_helpHasBeenPrinted" == "1" ];then
+		_PRINT_HELP=yes die "FATAL ERROR: Not enough positional arguments - we require at least 2 (namely: $_required_args_string), but got only ${_positionals_count}.
 	${_positionals[*]}" 1;
 	fi
 }
@@ -209,15 +191,22 @@ handle_passed_args_count()
 assign_positional_args()
 {
 	local _positional_name _shift_for=$1;
-	_positional_names="_arg_name ";
+	_positional_names="_arg_name _arg_command ";
+	_leftovers_count=$((${#_positionals[@]} - 2))
+	for ((ii = 0; ii < _leftovers_count; ii++));do
+		_positional_names="$_positional_names _arg_leftovers[$((ii + 0))]";
+	done
+
 	shift "$_shift_for"
 	for _positional_name in ${_positional_names};do
 		test $# -gt 0 || break;
-		eval "if [ \"\$_one_of${_positional_name}\" != \"\" ];then [[ \"\${_one_of${_positional_name}[*]}\" =~ \"\${1}\" ]];fi" || die "${_positional_name} must be one of: $(eval "echo \"\${_one_of${_positional_name}[*]}\"")" 1;
-		local _match_var="_match${_positional_name}";
-		local _regex="${!_match_var}";
-		if [ -n "$_regex" ]; then
-			[[ "${1}" =~ $_regex ]] || die "${_positional_name} does not match pattern: $_regex"
+		if ! [[ "$_positional_name" =~ "_arg_leftovers" ]];then
+			eval "if [ \"\$_one_of${_positional_name}\" != \"\" ];then [[ \"\${_one_of${_positional_name}[*]}\" =~ \"\${1}\" ]];fi" || die "${_positional_name} must be one of: $(eval "echo \"\${_one_of${_positional_name}[*]}\"")" 1;
+			local _match_var="_match${_positional_name}";
+			local _regex="${!_match_var}";
+			if [ -n "$_regex" ]; then
+				[[ "${1}" =~ $_regex ]] || die "${_positional_name} does not match pattern: $_regex"
+			fi
 		fi
 		eval "$_positional_name=\${1}" || die "Error during argument parsing, possibly an ParseArger bug." 1;
 		shift;
@@ -231,10 +220,10 @@ print_debug()
 	echo "DEBUG: $0 $@";
 	
 	echo -e "	name: ${_arg_name}";
-	echo -e "	host: ${_arg_host}";
+	echo -e "	command: ${_arg_command}";
 	echo -e "	base-dir: ${_arg_base_dir}";
-	echo -e "	open: ${_arg_open}";
 	echo -e "	verbose: ${_arg_verbose}";
+	echo -e "	leftovers: ${_arg_leftovers[*]}";
 
 }
 
@@ -259,51 +248,25 @@ trap on_interrupt INT;
 MOLT_NAME="$_arg_name"
 BASE_DIR="$_arg_base_dir"
 MOLT_HOME="$BASE_DIR/$MOLT_NAME"
+COMMAND="$_arg_command"
 
 # Check if molt exists
 if [ ! -d "$MOLT_HOME" ]; then
   die "Molt '$MOLT_NAME' not found at $MOLT_HOME" 1
 fi
 
-# Get port from config
-CONFIG_FILE="$MOLT_HOME/.openclaw/openclaw.json"
-if [ ! -f "$CONFIG_FILE" ]; then
-  die "Config file not found: $CONFIG_FILE" 1
+# Check if user exists
+if ! id "$MOLT_NAME" &>/dev/null; then
+  die "User '$MOLT_NAME' does not exist" 1
 fi
 
-MOLT_PORT=$(grep -o '"port":[[:space:]]*[0-9]*' "$CONFIG_FILE" 2>/dev/null | grep -o '[0-9]*$' || echo "")
-if [ -z "$MOLT_PORT" ]; then
-  die "Could not determine port from config" 1
+# Build full command with leftovers
+FULL_COMMAND="$COMMAND"
+if [ ${#_arg_leftovers[@]} -gt 0 ]; then
+  FULL_COMMAND="$FULL_COMMAND ${_arg_leftovers[*]}"
 fi
 
-# Determine host
-if [ "$_arg_host" = "auto" ]; then
-  # Try to get the server's main IP (not localhost)
-  HOST=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "")
-  if [ -z "$HOST" ]; then
-    HOST=$(ip route get 1 2>/dev/null | awk '{print $7; exit}' || echo "")
-  fi
-  if [ -z "$HOST" ]; then
-    HOST=$(hostname 2>/dev/null || echo "127.0.0.1")
-  fi
-else
-  HOST="$_arg_host"
-fi
+log "Executing as $MOLT_NAME: $FULL_COMMAND" 1
 
-# Build URL
-URL="http://${HOST}:${MOLT_PORT}/"
-
-# Output URL
-echo "$URL"
-
-# Optionally open browser
-if [ "$_arg_open" = "on" ]; then
-  log "Opening browser..." 1
-  if command -v xdg-open >/dev/null 2>&1; then
-    xdg-open "$URL" &
-  elif command -v open >/dev/null 2>&1; then
-    open "$URL" &
-  else
-    log "Could not find browser opener (xdg-open or open)" -1
-  fi
-fi
+# Execute command as molt user
+sudo -u "$MOLT_NAME" bash -c "$FULL_COMMAND"

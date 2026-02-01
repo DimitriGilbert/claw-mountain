@@ -1,6 +1,6 @@
 #!/bin/bash
 # @parseArger-begin
-# @parseArger-help "List all molts and their status" --option "help" --short-option "h"
+# @parseArger-help "Get dashboard URL for a molt (prints URL, optionally opens browser)" --option "help" --short-option "h"
 # @parseArger-verbose --option "verbose" --level "0" --quiet-option "quiet"
 _has_colors=0
 if [ -t 1 ]; then # Check if stdout is a terminal
@@ -10,8 +10,11 @@ if [ -t 1 ]; then # Check if stdout is a terminal
 	fi
 fi
 # @parseArger-declarations
+# @parseArger pos name "Molt name"
+# @parseArger opt host "Host/IP address to use in URL" --short H --default-value "auto"
 # @parseArger opt base-dir "Base directory for molts" --short d --default-value "/home/didi/molts" --complete "directory"
-# @parseArger flag verbose "Show detailed information" --short v
+# @parseArger flag open "Open browser with the URL" --short o
+# @parseArger flag verbose "Enable verbose output" --short v
 # @parseArger-declarations-end
 
 # @parseArger-utils
@@ -45,9 +48,16 @@ begins_with_short_option()
 # POSITIONALS ARGUMENTS
 _positionals=();
 _optional_positionals=();
+_arg_name="";
 # OPTIONALS ARGUMENTS
-_arg_base_dir="/home/didi/molts"
+_arg_host="auto"
+# Detect base directory (where clmnt is located)
+_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+# Go up two levels: .scripts/_molt/ -> .scripts/ -> project root
+PROJECT_ROOT="$(cd "$_SCRIPT_DIR/../.." && pwd)"
+_arg_base_dir="$PROJECT_ROOT"
 # FLAGS
+_arg_open="off"
 _arg_verbose="off"
 # NESTED
 _verbose_level="0";
@@ -60,11 +70,14 @@ print_help()
 
 	if [[ "$_helpHasBeenPrinted" == "1" ]]; then
 		_helpHasBeenPrinted=0;
-		echo -e "List all molts and their status:"
-	echo -e "	-d, --base-dir <base-dir>: Base directory for molts [default: ' /home/didi/molts ']"
-	echo -e "	-v|--verbose|--no-verbose: Show detailed information"
+		echo -e "Get dashboard URL for a molt (prints URL, optionally opens browser):"
+	echo -e "	name: Molt name"
+	echo -e "	-H, --host <host>: Host/IP address to use in URL [default: ' auto ']"
+	echo -e "	-d, --base-dir <base-dir>: Base directory for molts [default: '<auto-detected>']"
+	echo -e "	-o|--open|--no-open: Open browser with the URL"
+	echo -e "	-v|--verbose|--no-verbose: Enable verbose output"
 	echo -e "Usage :
-	$0 [--base-dir <value>] [--[no-]verbose]";
+	$0 <name> [--host <value>] [--base-dir <value>] [--[no-]open] [--[no-]verbose]";
 	fi
 
 }
@@ -111,6 +124,18 @@ parse_commandline()
 	do
 		_key="$1"
 		case "$_key" in
+			-H|--host)
+				test $# -lt 2 && die "Missing value for the option: '$_key'" 1
+				_arg_host="$2"
+				shift
+				;;
+			--host=*)
+				_arg_host="${1##--host=}"
+				;;
+			-H*)
+				_arg_host="${1##-H}"
+				;;
+			
 			-d|--base-dir)
 				test $# -lt 2 && die "Missing value for the option: '$_key'" 1
 				_arg_base_dir="$2"
@@ -123,6 +148,12 @@ parse_commandline()
 				_arg_base_dir="${1##-d}"
 				;;
 			
+			-o|--open)
+				_arg_open="on"
+				;;
+			--no-open)
+				_arg_open="off"
+				;;
 			-v|--verbose)
 				_arg_verbose="on"
 				;;
@@ -167,13 +198,13 @@ parse_commandline()
 
 handle_passed_args_count()
 {
-	local _required_args_string=""
-	if [ "${_positionals_count}" -gt 0 ] && [ "$_helpHasBeenPrinted" == "1" ];then
-		_PRINT_HELP=yes die "FATAL ERROR: There were spurious positional arguments --- we expect at most 0 (namely: $_required_args_string), but got ${_positionals_count} (the last one was: '${_last_positional}').
+	local _required_args_string="name"
+	if [ "${_positionals_count}" -gt 1 ] && [ "$_helpHasBeenPrinted" == "1" ];then
+		_PRINT_HELP=yes die "FATAL ERROR: There were spurious positional arguments --- we expect at most 1 (namely: $_required_args_string), but got ${_positionals_count} (the last one was: '${_last_positional}').
 	${_positionals[*]}" 1
 	fi
-	if [ "${_positionals_count}" -lt 0 ] && [ "$_helpHasBeenPrinted" == "1" ];then
-		_PRINT_HELP=yes die "FATAL ERROR: Not enough positional arguments - we require at least 0 (namely: $_required_args_string), but got only ${_positionals_count}.
+	if [ "${_positionals_count}" -lt 1 ] && [ "$_helpHasBeenPrinted" == "1" ];then
+		_PRINT_HELP=yes die "FATAL ERROR: Not enough positional arguments - we require at least 1 (namely: $_required_args_string), but got only ${_positionals_count}.
 	${_positionals[*]}" 1;
 	fi
 }
@@ -182,7 +213,7 @@ handle_passed_args_count()
 assign_positional_args()
 {
 	local _positional_name _shift_for=$1;
-	_positional_names="";
+	_positional_names="_arg_name ";
 	shift "$_shift_for"
 	for _positional_name in ${_positional_names};do
 		test $# -gt 0 || break;
@@ -203,7 +234,10 @@ print_debug()
 	# shellcheck disable=SC2145
 	echo "DEBUG: $0 $@";
 	
+	echo -e "	name: ${_arg_name}";
+	echo -e "	host: ${_arg_host}";
 	echo -e "	base-dir: ${_arg_base_dir}";
+	echo -e "	open: ${_arg_open}";
 	echo -e "	verbose: ${_arg_verbose}";
 
 }
@@ -226,90 +260,54 @@ trap on_interrupt INT;
 # print_debug "$@"
 # @parseArger-end
 
+MOLT_NAME="$_arg_name"
 BASE_DIR="$_arg_base_dir"
+MOLT_HOME="$BASE_DIR/$MOLT_NAME"
 
-if [ ! -d "$BASE_DIR" ]; then
-  die "Base directory not found: $BASE_DIR" 1
+# Check if molt exists
+if [ ! -d "$MOLT_HOME" ]; then
+  die "Molt '$MOLT_NAME' not found at $MOLT_HOME" 1
 fi
 
-# Header
-echo "========================================"
-echo "           MOLT REGISTRY"
-echo "========================================"
-echo ""
+# Get port from config
+CONFIG_FILE="$MOLT_HOME/.openclaw/openclaw.json"
+if [ ! -f "$CONFIG_FILE" ]; then
+  die "Config file not found: $CONFIG_FILE" 1
+fi
 
-# Count molts
-MOLT_COUNT=0
-RUNNING_COUNT=0
-STOPPED_COUNT=0
+MOLT_PORT=$(grep -o '"port":[[:space:]]*[0-9]*' "$CONFIG_FILE" 2>/dev/null | grep -o '[0-9]*$' || echo "")
+if [ -z "$MOLT_PORT" ]; then
+  die "Could not determine port from config" 1
+fi
 
-# Iterate through directories
-for molt_dir in "$BASE_DIR"/*/; do
-  [ -d "$molt_dir" ] || continue
-  
-  # Check if it's a molt (has .molt-info file)
-  if [ -f "$molt_dir/.molt-info" ]; then
-    MOLT_COUNT=$((MOLT_COUNT + 1))
-    
-    # Load molt info
-    source "$molt_dir/.molt-info"
-    MOLT_NAME=$(basename "$molt_dir")
-    
-    # Get port from config
-    CONFIG_FILE="$molt_dir/.openclaw/openclaw.json"
-    if [ -f "$CONFIG_FILE" ]; then
-      MOLT_PORT=$(grep -o '"port":[[:space:]]*[0-9]*' "$CONFIG_FILE" 2>/dev/null | grep -o '[0-9]*$' || echo "unknown")
-    fi
-    
-    # Check status
-    PID_FILE="$molt_dir/.openclaw/gateway.pid"
-    STATUS="stopped"
-    PID=""
-    
-    if [ -f "$PID_FILE" ]; then
-      PID=$(cat "$PID_FILE")
-      if ps -p "$PID" > /dev/null 2>&1; then
-        STATUS="running"
-        RUNNING_COUNT=$((RUNNING_COUNT + 1))
-      else
-        STATUS="stale"
-        STOPPED_COUNT=$((STOPPED_COUNT + 1))
-      fi
-    else
-      # Check for orphan processes
-      ORPHAN_PID=$(pgrep -u "$MOLT_NAME" -f "openclaw.*gateway" 2>/dev/null | head -1 || echo "")
-      if [ -n "$ORPHAN_PID" ]; then
-        STATUS="running*"
-        PID="$ORPHAN_PID"
-        RUNNING_COUNT=$((RUNNING_COUNT + 1))
-      else
-        STOPPED_COUNT=$((STOPPED_COUNT + 1))
-      fi
-    fi
-    
-    # Display molt info
-    echo "Molt:      $MOLT_NAME"
-    echo "Port:      ${MOLT_PORT:-unknown}"
-    echo "Home:      $molt_dir"
-    echo "Status:    $STATUS ${PID:+($PID)}"
-    
-    if [ "$_arg_verbose" = "on" ]; then
-      echo "User:      $MOLT_NAME"
-      if id "$MOLT_NAME" &>/dev/null; then
-        echo "Docker:    $(id -nG "$MOLT_NAME" 2>/dev/null | grep -qw "docker" && echo "yes" || echo "no")"
-      fi
-      echo "Created:   ${CREATED:-unknown}"
-    fi
-    
-    echo "----------------------------------------"
+# Determine host
+if [ "$_arg_host" = "auto" ]; then
+  # Try to get the server's main IP (not localhost)
+  HOST=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "")
+  if [ -z "$HOST" ]; then
+    HOST=$(ip route get 1 2>/dev/null | awk '{print $7; exit}' || echo "")
   fi
-done
+  if [ -z "$HOST" ]; then
+    HOST=$(hostname 2>/dev/null || echo "127.0.0.1")
+  fi
+else
+  HOST="$_arg_host"
+fi
 
-echo ""
-echo "Summary: $MOLT_COUNT molts total ($RUNNING_COUNT running, $STOPPED_COUNT stopped)"
-echo ""
+# Build URL
+URL="http://${HOST}:${MOLT_PORT}/"
 
-if [ $MOLT_COUNT -eq 0 ]; then
-  echo "No molts found. Create one with:"
-  echo "  ${0%/*}/create-molt <name>"
+# Output URL
+echo "$URL"
+
+# Optionally open browser
+if [ "$_arg_open" = "on" ]; then
+  log "Opening browser..." 1
+  if command -v xdg-open >/dev/null 2>&1; then
+    xdg-open "$URL" &
+  elif command -v open >/dev/null 2>&1; then
+    open "$URL" &
+  else
+    log "Could not find browser opener (xdg-open or open)" -1
+  fi
 fi

@@ -1,0 +1,558 @@
+#!/bin/bash
+# @parseArger-begin
+# @parseArger-help "Create a new molt (OpenClaw bot) with isolated user, home directory, and configuration" --option "help" --short-option "h"
+# @parseArger-verbose --option "verbose" --level "0" --quiet-option "quiet"
+_has_colors=0
+if [ -t 1 ]; then # Check if stdout is a terminal
+	ncolors=$(tput colors 2>/dev/null)
+	if [ -n "$ncolors" ] && [ "$ncolors" -ge 8 ]; then
+		_has_colors=1
+	fi
+fi
+# @parseArger-declarations
+# @parseArger pos name "Molt name (will be used as username)"
+# @parseArger opt port "Gateway port for this molt (default: auto-assign starting from 19001)" --short p
+# @parseArger opt base-dir "Base directory for molts" --short d --default-value "/home/didi/molts" --complete "directory"
+# @parseArger opt skill "Additional skill to install (repeatable)" --repeat
+# @parseArger flag skip-user "Skip user creation (user already exists)"
+# @parseArger flag verbose "Enable verbose output" --short v
+# @parseArger flag install-parsearger "Install parseArger for the molt user" --on
+# @parseArger flag install-bun "Install Bun for the molt user" --on
+# @parseArger flag install-gemini "Install gemini-cli for the molt user" --on
+# @parseArger flag install-opencode "Install opencode for the molt user" --on
+# @parseArger flag install-gogcli "Install gogcli (Google Suite CLI) for the molt user" --on
+# @parseArger flag install-msmtp "Install msmtp (simple SMTP client) for the molt user" --on
+# @parseArger-declarations-end
+
+# @parseArger-utils
+_helpHasBeenPrinted=1;
+_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)";
+# @parseArger-utils-end
+
+# @parseArger-parsing
+
+__cli_arg_count=$#;
+
+die()
+{
+	local _ret=1
+    if [[ -n "$2" ]] && [[ "$2" =~ ^[0-9]+$ ]]; then
+   	_ret="$2"
+    fi
+	test "${_PRINT_HELP:-no}" = yes && print_help >&2
+	log "$1" -3 >&2
+	exit "${_ret}"
+}
+
+
+begins_with_short_option()
+{
+	local first_option all_short_options=''
+	first_option="${1:0:1}"
+	test "$all_short_options" = "${all_short_options/$first_option/}" && return 1 || return 0
+}
+
+# POSITIONALS ARGUMENTS
+_positionals=();
+_optional_positionals=();
+_arg_name="";
+# OPTIONALS ARGUMENTS
+_arg_port=
+# Detect base directory (where clmnt is located)
+_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+# Go up two levels: .scripts/_molt/ -> .scripts/ -> project root
+PROJECT_ROOT="$(cd "$_SCRIPT_DIR/../.." && pwd)"
+_arg_base_dir="$PROJECT_ROOT"
+_arg_skill=()
+# FLAGS
+_arg_skip_user="off"
+_arg_verbose="off"
+_arg_install_parsearger="on"
+_arg_install_bun="on"
+_arg_install_gemini="on"
+_arg_install_opencode="on"
+_arg_install_gogcli="on"
+_arg_install_msmtp="on"
+# NESTED
+_verbose_level="0";
+
+
+
+print_help()
+{
+	_triggerSCHelp=1;
+
+	if [[ "$_helpHasBeenPrinted" == "1" ]]; then
+		_helpHasBeenPrinted=0;
+		echo -e "Create a new molt (OpenClaw bot) with isolated user, home directory, and configuration:"
+	echo -e "	name: Molt name (will be used as username)"
+	echo -e "	-p, --port <port>: Gateway port for this molt (default: auto-assign starting from 19001)"
+	echo -e "	-d, --base-dir <base-dir>: Base directory for molts [default: '<auto-detected>']"
+	echo -e "	--skill <skill>: Additional skill to install (repeatable), repeatable"
+	echo -e "	--skip-user|--no-skip-user: Skip user creation (user already exists)"
+	echo -e "	-v|--verbose|--no-verbose: Enable verbose output"
+	echo -e "	--install-parsearger|--no-install-parsearger: Install parseArger for the molt user, on by default (use --no-install-parsearger to turn it off)"
+	echo -e "	--install-bun|--no-install-bun: Install Bun for the molt user, on by default (use --no-install-bun to turn it off)"
+	echo -e "	--install-gemini|--no-install-gemini: Install gemini-cli for the molt user, on by default (use --no-install-gemini to turn it off)"
+	echo -e "	--install-opencode|--no-install-opencode: Install opencode for the molt user, on by default (use --no-install-opencode to turn it off)"
+	echo -e "	--install-gogcli|--no-install-gogcli: Install gogcli (Google Suite CLI) for the molt user, on by default (use --no-install-gogcli to turn it off)"
+	echo -e "	--install-msmtp|--no-install-msmtp: Install msmtp (simple SMTP client) for the molt user, on by default (use --no-install-msmtp to turn it off)"
+	echo -e "Usage :
+	$0 <name> [--port <value>] [--base-dir <value>] [--skill <value>] [--[no-]skip-user] [--[no-]verbose] [--[no-]install-parsearger] [--[no-]install-bun] [--[no-]install-gemini] [--[no-]install-opencode] [--[no-]install-gogcli] [--[no-]install-msmtp]";
+	fi
+
+}
+
+log() {
+	local _arg_msg="${1}";
+	local _arg_level="${2:-0}";
+	if [ "${_arg_level}" -le "${_verbose_level}" ]; then
+		case "$_arg_level" in
+			-3)
+				_arg_COLOR="\033[0;31m";
+				;;
+			-2)
+				_arg_COLOR="\033[0;33m";
+				;;
+			-1)
+				_arg_COLOR="\033[1;33m";
+				;;
+			1)
+				_arg_COLOR="\033[0;32m";
+				;;
+			2)
+				_arg_COLOR="\033[1;36m";
+				;;
+			3)
+				_arg_COLOR="\033[0;36m";
+				;;
+			*)
+				_arg_COLOR="\033[0m";
+				;;
+		esac
+		if [ "${_has_colors}" == "1" ]; then
+			echo -e "${_arg_COLOR}${_arg_msg}\033[0m";
+		else
+			echo "${_arg_msg}";
+		fi
+	fi
+}
+
+parse_commandline()
+{
+	_positionals_count=0
+	while test $# -gt 0
+	do
+		_key="$1"
+		case "$_key" in
+			-p|--port)
+				test $# -lt 2 && die "Missing value for the option: '$_key'" 1
+				_arg_port="$2"
+				shift
+				;;
+			--port=*)
+				_arg_port="${_key##--port=}"
+				;;
+			-p*)
+				_arg_port="${_key##-p}"
+				;;
+			
+			-d|--base-dir)
+				test $# -lt 2 && die "Missing value for the option: '$_key'" 1
+				_arg_base_dir="$2"
+				shift
+				;;
+			--base-dir=*)
+				_arg_base_dir="${_key##--base-dir=}"
+				;;
+			-d*)
+				_arg_base_dir="${_key##-d}"
+				;;
+			
+			--skill)
+				test $# -lt 2 && die "Missing value for the option: '$_key'" 1
+				_arg_skill+=("$2")
+				shift
+				;;
+			--skill=*)
+				_arg_skill+=("${_key##--skill=}")
+				;;
+			
+			--skip-user)
+				_arg_skip_user="on"
+				;;
+			--no-skip-user)
+				_arg_skip_user="off"
+				;;
+			-v|--verbose)
+				_arg_verbose="on"
+				;;
+			--no-verbose)
+				_arg_verbose="off"
+				;;
+			--install-parsearger)
+				_arg_install_parsearger="on"
+				;;
+			--no-install-parsearger)
+				_arg_install_parsearger="off"
+				;;
+			--install-bun)
+				_arg_install_bun="on"
+				;;
+			--no-install-bun)
+				_arg_install_bun="off"
+				;;
+			--install-gemini)
+				_arg_install_gemini="on"
+				;;
+			--no-install-gemini)
+				_arg_install_gemini="off"
+				;;
+			--install-opencode)
+				_arg_install_opencode="on"
+				;;
+			--no-install-opencode)
+				_arg_install_opencode="off"
+				;;
+			--install-gogcli)
+				_arg_install_gogcli="on"
+				;;
+			--no-install-gogcli)
+				_arg_install_gogcli="off"
+				;;
+			--install-msmtp)
+				_arg_install_msmtp="on"
+				;;
+			--no-install-msmtp)
+				_arg_install_msmtp="off"
+				;;
+			-h|--help)
+				print_help;
+				exit 0;
+				;;
+			-h*)
+				print_help;
+				exit 0;
+				;;
+			--verbose)
+				if [ $# -lt 2 ];then
+					_verbose_level="$((_verbose_level + 1))";
+				else
+					_verbose_level="$2";
+					shift;
+				fi
+				;;
+			--quiet)
+				if [ $# -lt 2 ];then
+					_verbose_level="$((_verbose_level - 1))";
+				else
+					_verbose_level="-$2";
+					shift;
+				fi
+				;;
+			
+				*)
+				_last_positional="$1"
+				_positionals+=("$_last_positional")
+				_positionals_count=$((_positionals_count + 1))
+				;;
+		esac
+		shift
+	done
+}
+
+
+handle_passed_args_count()
+{
+	local _required_args_string="name"
+	if [ "${_positionals_count}" -gt 1 ] && [ "$_helpHasBeenPrinted" == "1" ];then
+		_PRINT_HELP=yes die "FATAL ERROR: There were spurious positional arguments --- we expect at most 1 (namely: $_required_args_string), but got ${_positionals_count} (the last one was: '${_last_positional}').\n\t${_positionals[*]}" 1
+	fi
+	if [ "${_positionals_count}" -lt 1 ] && [ "$_helpHasBeenPrinted" == "1" ];then
+		_PRINT_HELP=yes die "FATAL ERROR: Not enough positional arguments - we require at least 1 (namely: $_required_args_string), but got only ${_positionals_count}.
+	${_positionals[*]}" 1;
+	fi
+}
+
+
+assign_positional_args()
+{
+	local _positional_name _shift_for=$1;
+	_positional_names="_arg_name ";
+	shift "$_shift_for"
+	for _positional_name in ${_positional_names};do
+		test $# -gt 0 || break;
+		eval "if [ \"\$_one_of${_positional_name}\" != \"\" ];then [[ \"\${_one_of${_positional_name}[*]}\" =~ \"\${1}\" ]];fi" || die "${_positional_name} must be one of: $(eval "echo \"\${_one_of${_positional_name}[*]}\"")" 1;
+		local _match_var="_match${_positional_name}";
+		local _regex="${!_match_var}";
+		if [ -n "$_regex" ]; then
+			[[ "${1}" =~ $_regex ]] || die "${_positional_name} does not match pattern: $_regex"
+		fi
+		eval "$_positional_name=\${1}" || die "Error during argument parsing, possibly an ParseArger bug." 1;
+		shift;
+	done
+}
+
+print_debug()
+{
+	print_help
+	# shellcheck disable=SC2145
+	echo "DEBUG: $0 $@";
+	
+	echo -e "	name: ${_arg_name}";
+	echo -e "	port: ${_arg_port}";
+	echo -e "	base-dir: ${_arg_base_dir}";
+	echo -e "	skill: ${_arg_skill[*]}";
+	echo -e "	skip-user: ${_arg_skip_user}";
+	echo -e "	verbose: ${_arg_verbose}";
+	echo -e "	install-parsearger: ${_arg_install_parsearger}";
+	echo -e "	install-bun: ${_arg_install_bun}";
+	echo -e "	install-gemini: ${_arg_install_gemini}";
+	echo -e "	install-opencode: ${_arg_install_opencode}";
+	echo -e "	install-gogcli: ${_arg_install_gogcli}";
+	echo -e "	install-msmtp: ${_arg_install_msmtp}";
+
+}
+
+
+on_interrupt() {
+	die Process aborted! 130;
+}
+
+
+parse_commandline "$@";
+handle_passed_args_count;
+assign_positional_args 1 "${_positionals[@]}";
+trap on_interrupt INT;
+
+
+
+
+# @parseArger-parsing-end
+# print_debug "$@"
+# @parseArger-end
+
+# Molt management configuration
+MOLT_NAME="$_arg_name"
+BASE_DIR="$_arg_base_dir"
+MOLT_HOME="$BASE_DIR/$MOLT_NAME"
+MOLT_PORT="$_arg_port"
+
+# Ensure base directory exists FIRST
+if [ ! -d "$BASE_DIR" ]; then
+  log "Creating base directory: $BASE_DIR" 1
+  mkdir -p "$BASE_DIR" || die "Failed to create base directory $BASE_DIR" 1
+fi
+
+# Auto-assign port if not provided
+if [ -z "$MOLT_PORT" ]; then
+  MOLT_PORT=19001
+  while [ -d "$BASE_DIR" ] && find "$BASE_DIR" -maxdepth 1 -type d -name "*" | while read -r d; do
+    if [ -f "$d/.openclaw/openclaw.json" ]; then
+      existing_port=$(grep -o '"port":[[:space:]]*[0-9]*' "$d/.openclaw/openclaw.json" 2>/dev/null | grep -o '[0-9]*$' || echo "")
+      [ "$existing_port" = "$MOLT_PORT" ] && exit 0
+    fi
+  done | grep -q .; do
+    MOLT_PORT=$((MOLT_PORT + 20))
+  done
+fi
+
+log "Creating molt: $MOLT_NAME" 1
+log "Home directory: $MOLT_HOME" 2
+log "Gateway port: $MOLT_PORT" 2
+
+# Check if molt already exists
+if [ -d "$MOLT_HOME" ]; then
+  die "Molt '$MOLT_NAME' already exists at $MOLT_HOME" 1
+fi
+
+# Create user if not skipping
+if [ "$_arg_skip_user" = "off" ]; then
+  log "Creating user: $MOLT_NAME" 1
+  
+  # Check if user already exists
+  if id "$MOLT_NAME" &>/dev/null; then
+    die "User '$MOLT_NAME' already exists" 1
+  fi
+  
+  # Create user with home directory (uses sudo for system user creation)
+  sudo useradd -m -d "$MOLT_HOME" -s /bin/bash "$MOLT_NAME" || die "Failed to create user - you may need sudo privileges" 1
+  
+  # Fix permissions so molt user can access their home directory
+  # The parent directories need execute permission for the molt user
+  sudo chmod o+x "$BASE_DIR" 2>/dev/null || true
+  
+  # Add to docker group
+  if getent group docker >/dev/null 2>&1; then
+    log "Adding $MOLT_NAME to docker group" 1
+    sudo usermod -aG docker "$MOLT_NAME" || log "Warning: Failed to add to docker group" -1
+  else
+    log "Warning: docker group not found" -1
+  fi
+  
+  # Ensure no sudo access
+  if grep -q "^$MOLT_NAME" /etc/sudoers 2>/dev/null; then
+    log "Warning: User $MOLT_NAME has sudo entries - removing" -1
+    sudo sed -i "/^$MOLT_NAME/d" /etc/sudoers
+  fi
+fi
+
+# Create OpenClaw directory structure
+log "Creating OpenClaw directory structure" 1
+OPENCLAW_DIR="$MOLT_HOME/.openclaw"
+
+# Create subdirectories using sudo (home dir has 700 permissions, only owner can access)
+sudo mkdir -p "$OPENCLAW_DIR"/{workspace,sandboxes}
+sudo mkdir -p "$OPENCLAW_DIR/agents/main/sessions"
+sudo mkdir -p "$MOLT_HOME/.local/bin"
+
+# Create molt info file
+sudo tee "$MOLT_HOME/.molt-info" > /dev/null <<EOF
+MOLT_NAME=$MOLT_NAME
+MOLT_PORT=$MOLT_PORT
+MOLT_HOME=$MOLT_HOME
+CREATED=$(date -Iseconds)
+EOF
+
+# Set ownership to molt user
+if id "$MOLT_NAME" &>/dev/null; then
+  sudo chown -R "$MOLT_NAME:$MOLT_NAME" "$MOLT_HOME" 2>/dev/null || log "Warning: Could not set ownership on $MOLT_HOME" -1
+else
+  log "Warning: Molt user '$MOLT_NAME' does not exist - directories created but not chowned" -1
+fi
+
+# Create initial OpenClaw config (using sudo since the directory is owned by molt user)
+sudo tee "$OPENCLAW_DIR/openclaw.json" > /dev/null <<EOF
+{
+  "gateway": {
+    "port": $MOLT_PORT,
+    "bind": "loopback",
+    "auth": {
+      "token": ""
+    }
+  },
+  "agents": {
+    "defaults": {
+      "workspace": "$MOLT_HOME/.openclaw/workspace",
+      "sandbox": {
+        "mode": "non-main",
+        "scope": "agent",
+        "workspaceAccess": "none",
+        "workspaceRoot": "$MOLT_HOME/.openclaw/sandboxes"
+      }
+    }
+  },
+  "channels": {
+    "whatsapp": {
+      "allowFrom": []
+    }
+  }
+}
+EOF
+
+# Create .env file
+sudo tee "$OPENCLAW_DIR/.env" > /dev/null <<EOF
+# OpenClaw environment for $MOLT_NAME
+OPENCLAW_CONFIG_PATH=$OPENCLAW_DIR/openclaw.json
+OPENCLAW_STATE_DIR=$OPENCLAW_DIR
+EOF
+
+# Ensure everything is owned by molt user
+if id "$MOLT_NAME" &>/dev/null; then
+  sudo chown -R "$MOLT_NAME:$MOLT_NAME" "$MOLT_HOME" 2>/dev/null || true
+fi
+
+# Fix npm cache permissions for molt user
+if [ -d "$MOLT_HOME/.npm" ]; then
+  sudo chown -R "$MOLT_NAME:$MOLT_NAME" "$MOLT_HOME/.npm" 2>/dev/null || true
+fi
+
+# Check for available tools
+log "Checking available tools..." 1
+
+# Check parseArger
+if [ -d "/home/didi/parseArger" ]; then
+  log "parseArger available at /home/didi/parseArger" 2
+else
+  log "Note: parseArger not found at /home/didi/parseArger" 2
+fi
+
+# Check Node.js/npm
+if command -v npm &>/dev/null; then
+  log "Node.js/npm available" 2
+else
+  log "Note: Node.js/npm not found - install with: sudo apt-get install nodejs npm" 2
+fi
+
+# Check Bun
+if command -v bun &>/dev/null; then
+  log "Bun available" 2
+else
+  log "Note: Bun not found - install with: curl -fsSL https://bun.sh/install | bash" 2
+fi
+
+# Check gemini-cli
+if command -v gemini &>/dev/null; then
+  log "gemini-cli available" 2
+else
+  log "Note: gemini-cli not found - install with: sudo npm install -g @anthropic-ai/gemini-cli" 2
+fi
+
+# Check opencode
+if command -v opencode &>/dev/null; then
+  log "opencode available" 2
+else
+  log "Note: opencode not found - install with: sudo npm install -g @opencode-ai/opencode" 2
+fi
+
+# Check msmtp
+if command -v msmtp &>/dev/null; then
+  log "msmtp available" 2
+else
+  log "Note: msmtp not found - install with: sudo apt-get install msmtp" 2
+fi
+
+# Install Node.js globally if not available
+log "Checking Node.js..." 1
+if ! command -v npm &>/dev/null; then
+  log "Installing Node.js globally..." 2
+  sudo apt-get update -qq && sudo apt-get install -y -qq nodejs npm 2>/dev/null || log "Warning: Failed to install Node.js via apt-get" -1
+fi
+
+# Install skills for the molt user (per-molt, not global)
+log "Installing skills for molt user..." 1
+
+# Function to install a skill via npx skills
+install_skill() {
+  local package="$1"
+  local specific_skill="$2"
+  log "Installing skill: $package${specific_skill:+ - $specific_skill}" 2
+  local cmd="npx skills add $package -g -y"
+  if [ -n "$specific_skill" ]; then
+    cmd="$cmd -s $specific_skill"
+  fi
+  if ! sudo -u "$MOLT_NAME" bash -c "$cmd" 2>/dev/null; then
+    log "Warning: Failed to install skill '$package'" -1
+    return 1
+  fi
+  return 0
+}
+
+# Install parseArger skills
+install_skill "DimitriGilbert/parseArger" "parsearger-core" || true
+install_skill "DimitriGilbert/parseArger" "parsearger-utils" || true
+
+# Install AI skills
+install_skill "DimitriGilbert/ai-skills" "agents-md" || true
+install_skill "DimitriGilbert/ai-skills" "frontend-design" || true
+install_skill "DimitriGilbert/ai-skills" "not-ai-writer" || true
+install_skill "DimitriGilbert/task-o-matic" "task-o-matic" || true
+
+log "Molt '$MOLT_NAME' created successfully!" 1
+log "" 0
+log "Next steps:" 1
+log "1. Setup OpenClaw: sudo -u $MOLT_NAME openclaw onboard" 0
+log "2. Start molt: ./clmnt molt start $MOLT_NAME" 0
+log "3. Check status: ./clmnt molt status $MOLT_NAME" 0
+log "" 0
+log "Dashboard will be available at: http://127.0.0.1:$MOLT_PORT/" 1
