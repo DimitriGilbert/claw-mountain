@@ -1,0 +1,23 @@
+# Molts directory - personal user data
+# This is where your actual molt instances are stored
+# DO NOT commit this to version control
+molts/
+
+# Optional: Ignore any molt directories at root level
+/molts/
+
+# Common development files to ignore
+*.log
+*.pid
+.env
+.DS_Store
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
