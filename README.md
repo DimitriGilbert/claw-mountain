@@ -8,8 +8,8 @@ A set of bash scripts to manage OpenClaw bot instances (molts) with isolated use
 
 1. **Clone this repository:**
    ```bash
-   git clone <repo-url>
-   cd molts
+   git clone https://github.com/DimitriGilbert/claw-mountain
+   cd claw-mountain
    ```
 
 2. **Create your molt storage directory:**
