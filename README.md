@@ -22,6 +22,7 @@ A CLI tool to manage OpenClaw bot instances (molts) with isolated users, home di
   - [molt clone](#molt-clone)
   - [molt dashboard](#molt-dashboard)
   - [molt delete](#molt-delete)
+  - [molt mail](#molt-mail)
 - [Workflow](#workflow)
 - [Directory Structure](#directory-structure)
 - [Multiple Molts](#multiple-molts)
@@ -75,6 +76,13 @@ clmnt                          # Main CLI entry point
     ├── exec                   # Execute command as molt user
     ├── list                   # List all molts
     ├── logs                   # View molt logs
+    ├── mail                   # Email management commands
+    │   ├── add                # Add email account + auto-setup
+    │   ├── check              # Manual sync & check
+    │   ├── cron-setup         # Configure automated checking
+    │   ├── remove             # Remove email account
+    │   ├── skill              # Edit mail processing rules
+    │   └── watch              # Manual trigger (testing)
     ├── shell                  # Open shell as molt user
     ├── start                  # Start molt gateway
     ├── status                 # Check molt status
@@ -104,6 +112,7 @@ Tool Installation Flags (all default to 'on'):
   --install-opencode        Install opencode AI assistant
   --install-gogcli          Install gogcli (Google Suite CLI - Gmail, Calendar, Drive)
   --install-msmtp           Install msmtp (simple SMTP client for sending emails)
+  --install-isync           Install isync (IMAP sync tool for receiving emails)
 ```
 
 **Examples:**
@@ -362,6 +371,160 @@ Options:
 ./clmnt molt delete old-bot --keep-home
 ```
 
+### molt mail
+
+Comprehensive email management with automated checking and AI-powered processing.
+
+Each molt can have multiple email accounts configured with automated checking that only triggers the AI when new mail actually arrives (not on a timer).
+
+#### mail add
+
+Add an email account with automatic setup of SMTP (msmtp), IMAP (mbsync), automated checking, and mail processing skill.
+
+```bash
+./clmnt molt mail add <name> <email> -p <password> [options]
+
+Options:
+  -p, --password <password>  Email password or app token [required]
+  -P, --provider <provider>  Provider preset [gmail|outlook|custom] [default: gmail]
+  -s, --smtp-host <host>     SMTP server host
+  -i, --imap-host <host>     IMAP server host
+  --smtp-port <port>         SMTP port [default: 587]
+  --imap-port <port>         IMAP port [default: 993]
+  -f, --from <address>       From address (defaults to email)
+  --default                  Set as default account
+  --no-tls                   Disable TLS
+  --no-starttls              Disable STARTTLS (SMTP)
+```
+
+**Examples:**
+```bash
+# Add Gmail account (creates skill + cron automatically)
+./clmnt molt mail add mybot mymail@gmail.com -p 'my-app-password'
+
+# Add Outlook as default
+./clmnt molt mail add mybot work@outlook.com -p 'password' -P outlook --default
+
+# Add custom provider
+./clmnt molt mail add mybot me@custom.com -p 'pass' -P custom \
+  -s smtp.custom.com -i imap.custom.com
+```
+
+#### mail check
+
+Manually sync and check emails (one-time, does not use cron).
+
+```bash
+./clmnt molt mail check <name> [options]
+
+Options:
+  -a, --account <name>    Check specific account only
+  -l, --limit <num>       Number of latest emails to show [default: 10]
+  --no-sync               Skip syncing (show cached only)
+  -t, --test-smtp         Send test email
+  -r, --test-recipient    Recipient for test email
+  --list                  List configured accounts only
+```
+
+**Examples:**
+```bash
+# Sync and check all accounts
+./clmnt molt mail check mybot
+
+# List accounts only
+./clmnt molt mail check mybot --list
+
+# Test SMTP delivery
+./clmnt molt mail check mybot -t -r test@example.com
+```
+
+#### mail remove
+
+Remove an email account from a molt.
+
+```bash
+./clmnt molt mail remove <name> <account> [options]
+
+Options:
+  --yes                   Skip confirmation
+  --keep-maildir          Keep Maildir folder after removal
+```
+
+**Examples:**
+```bash
+# Remove single account (with confirmation)
+./clmnt molt mail remove mybot mymail__gmail
+
+# Remove all accounts
+./clmnt molt mail remove mybot all --yes
+```
+
+#### mail cron-setup
+
+Configure automated mail checking as the molt user (cron job).
+
+Each molt gets a staggered schedule based on its port number to prevent system spikes:
+- Molt on port 19001: runs at :05 and :35 past the hour
+- Molt on port 19021: runs at :15 and :45 past the hour
+- etc.
+
+```bash
+./clmnt molt mail cron-setup <name> [options]
+
+Options:
+  -i, --interval <min>    Check interval in minutes [default: 30]
+  -o, --offset <min>      Minute offset 0-29 (auto-calculated if not set)
+  --remove                Remove the cron job
+  --status                Show current cron status
+```
+
+**Examples:**
+```bash
+# Setup automated checking (auto-staggered)
+./clmnt molt mail cron-setup mybot
+
+# Check cron status
+./clmnt molt mail cron-setup mybot --status
+
+# Remove automation
+./clmnt molt mail cron-setup mybot --remove
+
+# Custom interval
+./clmnt molt mail cron-setup mybot --interval 15
+```
+
+#### mail skill
+
+Edit the mail-gatekeeper skill for this molt. This skill defines how the AI processes incoming emails.
+
+```bash
+./clmnt molt mail skill <name>
+```
+
+**Example:**
+```bash
+# Edit mail processing rules
+./clmnt molt mail skill mybot
+```
+
+The skill is located at `molts/<name>/.openclaw/skills/mail-gatekeeper/SKILL.md` and contains:
+- Processing rules for different email types
+- Action definitions (notify, respond, create todo, etc.)
+- Sender/subject patterns to match
+- Default behaviors
+
+#### mail watch
+
+Manually trigger the mail watcher script (for testing). Runs as molt user.
+
+```bash
+# Manual check with verbose output
+sudo -u mybot /path/to/claw-mountain/.scripts/_molt/_mail/watch --verbose
+
+# Force trigger even if no new mail (for testing webhook)
+sudo -u mybot /path/to/claw-mountain/.scripts/_molt/_mail/watch --force --verbose
+```
+
 ## Workflow
 
 ### 1. Create a New Molt
@@ -430,6 +593,39 @@ sudo -u my-assistant openclaw onboard
 ./clmnt molt stop my-assistant
 ```
 
+### Email Automation Workflow
+
+Set up a molt that automatically checks emails and processes them with AI:
+
+```bash
+# 1. Create molt (installs msmtp and isync)
+./clmnt molt create my-email-bot
+
+# 2. Add email account (auto-creates skill + cron)
+./clmnt molt mail add my-email-bot work@company.com -p 'app-password'
+
+# 3. Edit the processing rules
+./clmnt molt mail skill my-email-bot
+# Customize the mail-gatekeeper skill with your rules
+
+# 4. Verify cron is set up
+./clmnt molt mail cron-setup my-email-bot --status
+
+# 5. Test manually
+sudo -u my-email-bot ./.scripts/_molt/_mail/watch --verbose
+
+# 6. Start the molt gateway
+./clmnt molt start my-email-bot
+```
+
+**How it works:**
+- Cron runs every 30 minutes (staggered per molt) as the molt user
+- Syncs emails via mbsync (IMAP)
+- Only calls AI webhook if NEW messages arrived
+- AI processes emails using the mail-gatekeeper skill
+- Skill defines rules: notify, respond, create todos, ignore, etc.
+- Results posted to main session (isolated processing)
+
 ## Directory Structure
 
 Each molt has the following structure:
@@ -446,11 +642,24 @@ Each molt has the following structure:
     ├── gogcli/                     # gogcli source (if built from source)
     ├── .bun/                       # Bun JavaScript runtime
     ├── .nvm/                       # Node Version Manager (if needed)
+    ├── Maildir/                    # Email storage (per-account)
+    │   └── <account-name>/         # Account-specific maildir
+    │       ├── cur/                # Current messages
+    │       ├── new/                # New messages
+    │       └── tmp/                # Temp during delivery
+    ├── .msmtprc                    # SMTP configuration (msmtp)
+    ├── .mbsyncrc                   # IMAP configuration (mbsync)
+    ├── .mail-state/                # Mail watcher state
+    │   ├── last-check.json         # Last check timestamp
+    │   └── cron.log                # Cron execution logs
     └── .openclaw/                  # OpenClaw configuration
         ├── openclaw.json           # OpenClaw config file
         ├── .env                    # Environment variables
         ├── workspace/              # Agent workspace
         ├── sandboxes/              # Sandbox directories
+        ├── skills/                 # Per-molt skills
+        │   └── mail-gatekeeper/    # Email processing skill
+        │       └── SKILL.md        # Skill definition
         └── agents/
             └── main/
                 └── sessions/       # Session storage
@@ -460,6 +669,7 @@ Documentation:
 ```
 ./.docs/
 ├── google_console_auth.md          # gogcli OAuth setup guide
+├── mail_skill_template.md          # Template for mail-gatekeeper skill
 └── msmtp_setup.md                  # msmtp email configuration guide
 ```
 
@@ -476,6 +686,13 @@ Scripts:
     ├── exec
     ├── list
     ├── logs
+    ├── mail                          # Email management router
+    │   ├── add                       # Add email + setup automation
+    │   ├── check                     # Manual sync & check
+    │   ├── cron-setup                # Configure automated checking
+    │   ├── remove                    # Remove email account
+    │   ├── skill                     # Edit mail-gatekeeper skill
+    │   └── watch                     # Mail watcher script (cron uses this)
     ├── shell
     ├── start
     ├── status
@@ -529,6 +746,13 @@ Lightweight SMTP client for sending emails.
 - Features: Send emails via command line, perfect for scripts and automation
 - Zero interactivity, configuration file-based
 
+### isync (mbsync)
+Fast IMAP synchronization tool for receiving emails.
+- Usage: `mbsync --help`
+- Automatically configured by `clmnt molt mail add`
+- Syncs IMAP to local Maildir (fast, efficient, scriptable)
+- Used by automated mail checker
+
 ### Skills System
 AI skills are installed via `npx skills` for gemini-cli and opencode:
 - Skills add specialized knowledge and capabilities
@@ -576,6 +800,47 @@ sudo usermod -aG docker <molt-name>
 Check logs:
 ```bash
 ./clmnt molt logs <name> -f
+```
+
+### Mail Not Being Checked Automatically
+
+Check cron job status:
+```bash
+./clmnt molt mail cron-setup <name> --status
+```
+
+Check cron logs:
+```bash
+sudo -u <name> cat ~/molts/<name>/.mail-state/cron.log
+```
+
+Ensure webhook token is configured:
+```bash
+grep '"token"' ~/molts/<name>/.openclaw/openclaw.json
+```
+
+### AI Not Being Called for New Mail
+
+Test the watcher manually:
+```bash
+sudo -u <name> ./.scripts/_molt/_mail/watch --verbose
+```
+
+Verify OpenClaw hooks are enabled:
+```bash
+grep -A5 '"hooks"' ~/molts/<name>/.openclaw/openclaw.json
+```
+
+### mbsync Fails to Sync
+
+Check configuration:
+```bash
+sudo -u <name> cat ~/.mbsyncrc
+```
+
+Test manually:
+```bash
+sudo -u <name> mbsync -c ~/.mbsyncrc -a -V
 ```
 
 ## Privacy Note

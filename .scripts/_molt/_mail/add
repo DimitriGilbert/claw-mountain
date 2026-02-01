@@ -529,6 +529,69 @@ log "  SMTP: $MSMTPRC" 0
 log "  IMAP: $MBSYNCRC" 0
 log "  Mail: $ACCOUNT_MAILDIR" 0
 log "" 0
+log "Setting up mail gatekeeper skill..." 1
+
+# Create skill directory
+SKILL_DIR="$MOLT_HOME/.openclaw/skills/mail-gatekeeper"
+sudo -u "$MOLT_NAME" mkdir -p "$SKILL_DIR"
+
+# Create skill from template if it doesn't exist
+if [[ ! -f "$SKILL_DIR/SKILL.md" ]]; then
+    # Copy and customize template
+    TEMPLATE="$_PROJECT_ROOT/.docs/mail_skill_template.md"
+    if [[ -f "$TEMPLATE" ]]; then
+        # Replace placeholders
+        ACCOUNTS_LIST=$(grep "^account " "$MSMTPRC" 2>/dev/null | awk '{print $2}' | grep -v "^default$" | tr '\n' ', ' | sed 's/, $//')
+        sudo -u "$MOLT_NAME" sed \
+            -e "s/{{MOLT_NAME}}/$MOLT_NAME/g" \
+            -e "s|{{SKILL_PATH}}|$SKILL_DIR/SKILL.md|g" \
+            -e "s/{{ACCOUNTS}}/${ACCOUNTS_LIST:-none}/g" \
+            -e "s/{{RULES}}/Add your custom rules here./g" \
+            "$TEMPLATE" > "$SKILL_DIR/SKILL.md"
+        sudo chown "$MOLT_NAME:$MOLT_NAME" "$SKILL_DIR/SKILL.md"
+        sudo chmod 644 "$SKILL_DIR/SKILL.md"
+        log "Created skill: $SKILL_DIR/SKILL.md" 2
+    fi
+else
+    log "Skill already exists at $SKILL_DIR/SKILL.md" 2
+fi
+
+# Enable skill in openclaw.json if not already
+OPENCLAW_CONFIG="$OPENCLAW_DIR/openclaw.json"
+if [[ -f "$OPENCLAW_CONFIG" ]]; then
+    # Check if skill watcher is enabled
+    if ! grep -q '"watch":' "$OPENCLAW_CONFIG" 2>/dev/null; then
+        log "Note: Skill auto-reload not enabled. Add to openclaw.json:" 2
+        log '  skills: { load: { watch: true } }' 0
+    fi
+fi
+
+log "" 0
+log "Setting up automated mail checking..." 1
+
+# Setup cron job (with staggered offset)
+CRON_SETUP="$_SCRIPT_DIR/cron-setup"
+if [[ -f "$CRON_SETUP" ]]; then
+    sudo -u "$MOLT_NAME" bash "$CRON_SETUP" "$MOLT_NAME" --interval 30 2>&1 | while read -r line; do
+        log "$line" 2
+    done
+else
+    log "Warning: cron-setup script not found" -1
+fi
+
+log "" 0
+log "✓ Email account setup complete!" 1
+log "" 0
 log "Next steps:" 1
-log "  Check emails: ./clmnt molt mail check $MOLT_NAME" 0
+log "  1. Edit rules: ./clmnt molt mail skill $MOLT_NAME" 0
+log "  2. Test manually: sudo -u $MOLT_NAME $_SCRIPT_DIR/watch --verbose" 0
+log "  3. Check status: ./clmnt molt mail cron-setup $MOLT_NAME --status" 0
+log "" 0
+log "Automated checking:" 1
+log "  - Runs every 30 minutes as $MOLT_NAME user" 0
+log "  - Only triggers AI when new mail arrives" 0
+log "  - AI uses mail-gatekeeper skill to process emails" 0
+log "  - Staggered schedule to prevent system spikes" 0
+log "" 0
+log "  Check emails manually: ./clmnt molt mail check $MOLT_NAME" 0
 log "  Test SMTP: ./clmnt molt mail check $MOLT_NAME -t -r <recipient>" 0

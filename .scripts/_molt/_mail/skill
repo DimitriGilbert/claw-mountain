@@ -1,0 +1,68 @@
+#!/bin/bash
+#
+# Edit mail-gatekeeper skill for a molt
+#
+
+set -e
+
+usage() {
+    echo "Usage: $0 <molt-name>"
+    echo ""
+    echo "Open the mail-gatekeeper skill for editing"
+    echo ""
+    echo "Arguments:"
+    echo "  name    Molt name"
+    exit 1
+}
+
+MOLT_NAME="$1"
+
+if [[ -z "$MOLT_NAME" ]]; then
+    usage
+fi
+
+# Get paths
+_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_PROJECT_ROOT="$(cd "$_SCRIPT_DIR/../../../.." && pwd)"
+MOLT_HOME="$_PROJECT_ROOT/$MOLT_NAME"
+SKILL_PATH="$MOLT_HOME/.openclaw/skills/mail-gatekeeper/SKILL.md"
+
+# Validate molt exists
+if [[ ! -d "$MOLT_HOME" ]]; then
+    echo "Error: Molt '$MOLT_NAME' does not exist"
+    exit 1
+fi
+
+# Check if skill exists
+if [[ ! -f "$SKILL_PATH" ]]; then
+    echo "Error: Mail gatekeeper skill not found"
+    echo "Add an email account first: clmnt molt mail add $MOLT_NAME <email> -p <password>"
+    exit 1
+fi
+
+# Detect editor
+if [[ -n "$EDITOR" ]]; then
+    EDITOR_CMD="$EDITOR"
+elif command -v nano &>/dev/null; then
+    EDITOR_CMD="nano"
+elif command -v vim &>/dev/null; then
+    EDITOR_CMD="vim"
+elif command -v vi &>/dev/null; then
+    EDITOR_CMD="vi"
+else
+    echo "Error: No editor found. Set EDITOR environment variable."
+    exit 1
+fi
+
+echo "Opening mail-gatekeeper skill for $MOLT_NAME..."
+echo "Editor: $EDITOR_CMD"
+echo "File: $SKILL_PATH"
+echo ""
+echo "Tip: Edit the RULES section to customize email processing"
+echo ""
+
+# Open editor
+$EDITOR_CMD "$SKILL_PATH"
+
+echo ""
+echo "✓ Skill updated. Changes take effect immediately (skill auto-reload enabled)."

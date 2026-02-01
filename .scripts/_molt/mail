@@ -46,7 +46,7 @@ begins_with_short_option()
 _positionals=();
 _optional_positionals=();
 _arg_action="";
-_one_of_arg_action=("add" "remove" "check" );
+_one_of_arg_action=("add" "remove" "check" "cron-setup" "watch" "skill" );
 _arg_subcommand_arg="_arg_action";
 __subcommand=();
 # OPTIONALS ARGUMENTS
@@ -73,7 +73,7 @@ print_help()
 	if [[ "$_helpHasBeenPrinted" == "1" ]]; then
 		_helpHasBeenPrinted=0;
 		echo -e "Manage email accounts for a molt:"
-	echo -e "	action: Mail action to perform [one of 'add' 'remove' 'check']"
+	echo -e "	action: Mail action to perform [one of 'add' 'remove' 'check' 'cron-setup' 'watch' 'skill']"
 	echo -e ""
 	echo -e "Subcommands:"
 	echo -e "  add     - Add a new email account to a molt"
@@ -84,6 +84,15 @@ print_help()
 	echo -e ""
 	echo -e "  check   - Check email accounts and sync inbox"
 	echo -e "            Usage: clmnt molt mail check <molt-name> [options]"
+	echo -e ""
+	echo -e "  cron-setup - Setup/remove automated mail checking cron job"
+	echo -e "            Usage: clmnt molt mail cron-setup <molt-name> [--interval <min>]"
+	echo -e ""
+	echo -e "  watch   - Manually trigger mail check (for testing)"
+	echo -e "            Usage: sudo -u <molt> /path/to/watch --verbose"
+	echo -e ""
+	echo -e "  skill   - Edit mail processing rules for this molt"
+	echo -e "            Usage: clmnt molt mail skill <molt-name>"
 	echo -e ""
 	echo -e "Examples:"
 	echo -e "  # Add a Gmail account"

@@ -1,0 +1,242 @@
+#!/bin/bash
+# @parseArger-begin
+# @parseArger-help "Setup mail checking cron job for a molt" --option "help" --short-option "h"
+# @parseArger-verbose --option "verbose" --level "0" --quiet-option "quiet"
+_has_colors=0
+if [ -t 1 ]; then
+	ncolors=$(tput colors 2>/dev/null)
+	if [ -n "$ncolors" ] && [ "$ncolors" -ge 8 ]; then
+		_has_colors=1
+	fi
+fi
+# @parseArger-declarations
+# @parseArger pos name "Molt name to configure"
+# @parseArger opt interval "Check interval in minutes" --short i --default-value "30"
+# @parseArger opt offset "Minute offset (0-29, auto-calculated if not set)" --short o
+# @parseArger flag remove "Remove the cron job instead of adding"
+# @parseArger flag status "Show current cron status"
+# @parseArger-declarations-end
+
+# @parseArger-utils
+_helpHasBeenPrinted=1;
+_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)";
+# @parseArger-utils-end
+
+# @parseArger-parsing
+# [parseArger generated code will be here]
+# ... [generated parsing code] ...
+# @parseArger-parsing-end
+# @parseArger-end
+
+# Manual parsing for now since parseArger isn't available
+usage() {
+    echo "Usage: $0 <molt-name> [options]"
+    echo ""
+    echo "Setup mail checking cron job for a molt user"
+    echo ""
+    echo "Arguments:"
+    echo "  name                    Molt name to configure"
+    echo ""
+    echo "Options:"
+    echo "  -i, --interval <min>    Check interval in minutes (default: 30)"
+    echo "  -o, --offset <min>      Minute offset 0-29 (auto if not set)"
+    echo "      --remove            Remove the cron job"
+    echo "      --status            Show current cron status"
+    echo "  -h, --help              Show this help"
+    exit 1
+}
+
+MOLT_NAME=""
+INTERVAL=30
+OFFSET=""
+REMOVE=0
+STATUS=0
+VERBOSE=0
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -i|--interval)
+            INTERVAL="$2"
+            shift 2
+            ;;
+        -o|--offset)
+            OFFSET="$2"
+            shift 2
+            ;;
+        --remove)
+            REMOVE=1
+            shift
+            ;;
+        --status)
+            STATUS=1
+            shift
+            ;;
+        --verbose)
+            VERBOSE=1
+            shift
+            ;;
+        -h|--help)
+            usage
+            ;;
+        -*)
+            echo "Unknown option: $1"
+            usage
+            ;;
+        *)
+            if [[ -z "$MOLT_NAME" ]]; then
+                MOLT_NAME="$1"
+            else
+                echo "Unknown argument: $1"
+                usage
+            fi
+            shift
+            ;;
+    esac
+done
+
+if [[ -z "$MOLT_NAME" ]]; then
+    echo "Error: Molt name required"
+    usage
+fi
+
+# Get project root and paths
+_PROJECT_ROOT="$(cd "$_SCRIPT_DIR/../../../.." && pwd)"
+BASE_DIR="$_PROJECT_ROOT"
+MOLT_HOME="$BASE_DIR/$MOLT_NAME"
+
+# Validate molt exists
+if [[ ! -d "$MOLT_HOME" ]]; then
+    echo "Error: Molt '$MOLT_NAME' does not exist at $MOLT_HOME"
+    exit 1
+fi
+
+# Check molt user exists
+if ! id "$MOLT_NAME" &>/dev/null; then
+    echo "Error: User '$MOLT_NAME' does not exist"
+    exit 1
+fi
+
+# Get molt port for offset calculation
+MOLT_PORT=""
+if [[ -f "$MOLT_HOME/.molt-info" ]]; then
+    MOLT_PORT=$(grep "MOLT_PORT=" "$MOLT_HOME/.molt-info" | cut -d= -f2)
+fi
+
+# Watch script path
+WATCH_SCRIPT="$_SCRIPT_DIR/watch"
+
+# Function to calculate offset from molt name/port
+# Ensures staggered schedules across molts
+calculate_offset() {
+    local name="$1"
+    local port="$2"
+    
+    # If port available, use port-based offset
+    if [[ -n "$port" && "$port" =~ ^[0-9]+$ ]]; then
+        # Map ports 19001, 19021, 19041... to offsets 0, 2, 4...
+        local base_port=19001
+        local offset=$(( (port - base_port) / 10 ))
+        echo $(( offset % 30 ))
+        return
+    fi
+    
+    # Fallback: hash the name
+    local hash=$(echo -n "$name" | md5sum | cut -d' ' -f1)
+    local num=$((0x${hash:0:8}))
+    echo $(( num % 30 ))
+}
+
+# Function to get current cron jobs for molt user
+get_current_cron() {
+    sudo -u "$MOLT_NAME" crontab -l 2>/dev/null || echo ""
+}
+
+# Function to remove mail-watch entries
+remove_cron() {
+    local current=$(get_current_cron)
+    
+    # Filter out mail-watch entries
+    local new_cron=$(echo "$current" | grep -v "# MOLT-MAIL-WATCH" | grep -v "molt-mail-watch")
+    
+    # Install new crontab
+    if [[ -z "$new_cron" ]]; then
+        echo "" | sudo -u "$MOLT_NAME" crontab - 2>/dev/null || true
+    else
+        echo "$new_cron" | sudo -u "$MOLT_NAME" crontab - 2>/dev/null
+    fi
+    
+    echo "✓ Removed mail checking cron job for $MOLT_NAME"
+}
+
+# Function to show status
+show_status() {
+    local current=$(get_current_cron)
+    local has_mail_job=$(echo "$current" | grep "molt-mail-watch" || true)
+    
+    if [[ -n "$has_mail_job" ]]; then
+        echo "✓ Mail checking cron job is active for $MOLT_NAME"
+        echo ""
+        echo "Current crontab entry:"
+        echo "$current" | grep -A1 "# MOLT-MAIL-WATCH"
+    else
+        echo "✗ No mail checking cron job configured for $MOLT_NAME"
+    fi
+}
+
+# Function to install cron job
+install_cron() {
+    # Calculate offset if not provided
+    if [[ -z "$OFFSET" ]]; then
+        OFFSET=$(calculate_offset "$MOLT_NAME" "$MOLT_PORT")
+        echo "Auto-calculated offset: $OFFSET minutes (based on port $MOLT_PORT)"
+    fi
+    
+    # Validate offset
+    if [[ ! "$OFFSET" =~ ^[0-9]+$ ]] || [[ $OFFSET -lt 0 ]] || [[ $OFFSET -ge $INTERVAL ]]; then
+        echo "Error: Offset must be between 0 and $((INTERVAL-1))"
+        exit 1
+    fi
+    
+    # Build cron expression
+    # Runs every INTERVAL minutes, at OFFSET minutes past the hour
+    # e.g., interval=30, offset=5 → runs at :05 and :35
+    CRON_MINS="$OFFSET"
+    if [[ $OFFSET -gt 0 ]]; then
+        CRON_MINS="${CRON_MINS},$((OFFSET + INTERVAL))"
+    fi
+    CRON_EXPR="$CRON_MINS * * * *"
+    
+    # Get current crontab
+    local current=$(get_current_cron)
+    
+    # Remove existing mail-watch entries
+    local filtered=$(echo "$current" | grep -v "# MOLT-MAIL-WATCH" | grep -v "molt-mail-watch")
+    
+    # Create new crontab
+    local new_cron="$filtered
+# MOLT-MAIL-WATCH - Auto-check emails every ${INTERVAL}min (offset: ${OFFSET})
+$CRON_EXPR $WATCH_SCRIPT --verbose >> $MOLT_HOME/.mail-state/cron.log 2>&1"
+    
+    # Install
+    echo "$new_cron" | sudo -u "$MOLT_NAME" crontab -
+    
+    echo "✓ Mail checking cron job installed for $MOLT_NAME"
+    echo ""
+    echo "Schedule: Every $INTERVAL minutes at :$OFFSET and :$((OFFSET + INTERVAL)) past the hour"
+    echo "Script: $WATCH_SCRIPT"
+    echo "Log: $MOLT_HOME/.mail-state/cron.log"
+}
+
+# Main logic
+if [[ $STATUS -eq 1 ]]; then
+    show_status
+    exit 0
+fi
+
+if [[ $REMOVE -eq 1 ]]; then
+    remove_cron
+    exit 0
+fi
+
+# Default: install
+install_cron
