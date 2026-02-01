@@ -3,9 +3,6 @@
 # DO NOT commit this to version control
 molts/
 
-# Optional: Ignore any molt directories at root level
-/molts/
-
 # Common development files to ignore
 *.log
 *.pid
@@ -21,3 +18,4 @@ molts/
 tmp/
 temp/
 *.tmp
+AD

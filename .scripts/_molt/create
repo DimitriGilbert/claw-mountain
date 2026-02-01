@@ -61,8 +61,8 @@ _arg_name="";
 _arg_port=
 # Detect base directory (where clmnt is located)
 _SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
-# Go up two levels: .scripts/_molt/ -> .scripts/ -> project root
-PROJECT_ROOT="$(cd "$_SCRIPT_DIR/../.." && pwd)"
+# Go up three levels: .scripts/_molt/_mail/ -> .scripts/_molt/ -> .scripts/ -> project root
+PROJECT_ROOT="$(cd "$_SCRIPT_DIR/../../.." && pwd)"
 _arg_base_dir="$PROJECT_ROOT"
 _arg_skill=()
 # FLAGS
