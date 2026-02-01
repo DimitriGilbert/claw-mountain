@@ -1,17 +1,17 @@
 #!/bin/bash
 # @parseArger-begin
-# @parseArger-help "Manage molt (OpenClaw bot) instances" --option "help" --short-option "h"
+# @parseArger-help "Manage email accounts for a molt" --option "help" --short-option "h"
 # @parseArger-verbose --option "verbose" --level "0" --quiet-option "quiet"
 # @parseArger-leftovers leftovers
 _has_colors=0
-if [ -t 1 ]; then # Check if stdout is a terminal
+if [ -t 1 ]; then
 	ncolors=$(tput colors 2>/dev/null)
 	if [ -n "$ncolors" ] && [ "$ncolors" -ge 8 ]; then
 		_has_colors=1
 	fi
 fi
 # @parseArger-declarations
-# @parseArger pos action "Action to perform on the molt" --subcommand-run --subcommand-use-leftovers --subcommand --one-of "create" --one-of "list" --one-of "start" --one-of "stop" --one-of "status" --one-of "logs" --one-of "delete" --one-of "clone" --one-of "exec" --one-of "shell" --one-of "browser" --one-of "dashboard" --one-of "mail"
+# @parseArger pos action "Mail action to perform" --subcommand-run --subcommand-use-leftovers --subcommand --subcommand-directory "_mail" --one-of "add" --one-of "remove" --one-of "check"
 # @parseArger-declarations-end
 
 # @parseArger-utils
@@ -46,7 +46,7 @@ begins_with_short_option()
 _positionals=();
 _optional_positionals=();
 _arg_action="";
-_one_of_arg_action=("create" "list" "start" "stop" "status" "logs" "delete" "clone" "exec" "shell" "browser" "dashboard" "mail" );
+_one_of_arg_action=("add" "remove" "check" );
 _arg_subcommand_arg="_arg_action";
 __subcommand=();
 # OPTIONALS ARGUMENTS
@@ -72,10 +72,42 @@ print_help()
 
 	if [[ "$_helpHasBeenPrinted" == "1" ]]; then
 		_helpHasBeenPrinted=0;
-		echo -e "Manage molt (OpenClaw bot) instances:"
-	echo -e "	action: Action to perform on the molt [one of 'create' 'list' 'start' 'stop' 'status' 'logs' 'delete' 'clone' 'exec' 'shell' 'browser' 'dashboard' 'mail']"
+		echo -e "Manage email accounts for a molt:"
+	echo -e "	action: Mail action to perform [one of 'add' 'remove' 'check']"
+	echo -e ""
+	echo -e "Subcommands:"
+	echo -e "  add     - Add a new email account to a molt"
+	echo -e "            Usage: clmnt molt mail add <molt-name> <email> -p <password> [options]"
+	echo -e ""
+	echo -e "  remove  - Remove an email account from a molt"
+	echo -e "            Usage: clmnt molt mail remove <molt-name> <account-name> [options]"
+	echo -e ""
+	echo -e "  check   - Check email accounts and sync inbox"
+	echo -e "            Usage: clmnt molt mail check <molt-name> [options]"
+	echo -e ""
+	echo -e "Examples:"
+	echo -e "  # Add a Gmail account"
+	echo -e "  clmnt molt mail add mybot mymail@gmail.com -p 'my-app-password'"
+	echo -e ""
+	echo -e "  # Add an Outlook account as default"
+	echo -e "  clmnt molt mail add mybot work@outlook.com -p 'password' -P outlook --default"
+	echo -e ""
+	echo -e "  # Remove an account"
+	echo -e "  clmnt molt mail remove mybot mymail__gmail"
+	echo -e ""
+	echo -e "  # Check all accounts (sync and show latest)"
+	echo -e "  clmnt molt mail check mybot"
+	echo -e ""
+	echo -e "  # List configured accounts only"
+	echo -e "  clmnt molt mail check mybot --list"
+	echo -e ""
+	echo -e "  # Send test email"
+	echo -e "  clmnt molt mail check mybot -t -r test@example.com"
+	echo -e ""
+	echo -e "For more help on a subcommand:"
+	echo -e "  clmnt molt mail <action> --help"
 	echo -e "Usage :
-	$0 <action>";
+	$0 <action> [options]";
 	fi
 
 	fi
@@ -89,29 +121,29 @@ log() {
 	if [ "${_arg_level}" -le "${_verbose_level}" ]; then
 		case "$_arg_level" in
 			-3)
-				_arg_COLOR="[0;31m";
+				_arg_COLOR="\033[0;31m";
 				;;
 			-2)
-				_arg_COLOR="[0;33m";
+				_arg_COLOR="\033[0;33m";
 				;;
 			-1)
-				_arg_COLOR="[1;33m";
+				_arg_COLOR="\033[1;33m";
 				;;
 			1)
-				_arg_COLOR="[0;32m";
+				_arg_COLOR="\033[0;32m";
 				;;
 			2)
-				_arg_COLOR="[1;36m";
+				_arg_COLOR="\033[1;36m";
 				;;
 			3)
-				_arg_COLOR="[0;36m";
+				_arg_COLOR="\033[0;36m";
 				;;
 			*)
-				_arg_COLOR="[0m";
+				_arg_COLOR="\033[0m";
 				;;
 		esac
 		if [ "${_has_colors}" == "1" ]; then
-			echo -e "${_arg_COLOR}${_arg_msg}[0m";
+			echo -e "${_arg_COLOR}${_arg_msg}\033[0m";
 		else
 			echo "${_arg_msg}";
 		fi
@@ -190,16 +222,16 @@ assign_positional_args()
 			fi
 			
 			if [ "$_arg_subcommand_arg" == "$_positional_name" ];then
-				if [ -f "_molt/${1}" ] && command -v "_molt/${1}" > /dev/null 2>&1;then
-					__subcommand+=("_molt/${1}");
-				elif [ -f "$_SCRIPT_DIR/_molt/${1}" ] && command -v "$_SCRIPT_DIR/_molt/${1}" > /dev/null 2>&1;then
-					__subcommand+=("$_SCRIPT_DIR/_molt/${1}");
-				elif [[ "_molt/" == $(basename "$_SCRIPT_DIR")* ]];then
+				if [ -f "_mail/${1}" ] && command -v "_mail/${1}" > /dev/null 2>&1;then
+					__subcommand+=("_mail/${1}");
+				elif [ -f "$_SCRIPT_DIR/_mail/${1}" ] && command -v "$_SCRIPT_DIR/_mail/${1}" > /dev/null 2>&1;then
+					__subcommand+=("$_SCRIPT_DIR/_mail/${1}");
+				elif [[ "_mail/" == $(basename "$_SCRIPT_DIR")* ]];then
 					cmdToSub="$(basename "$_SCRIPT_DIR")";
-					cmdsubDir="_molt/";
+					cmdsubDir="_mail/";
 					__subcommand+=("$_SCRIPT_DIR${cmdsubDir#"${cmdToSub}"}${1}");
 				else
-					__subcommand+=("$_SCRIPT_DIR/_molt/${1}");
+					__subcommand+=("$_SCRIPT_DIR/_mail/${1}");
 				fi
 			fi
 		fi

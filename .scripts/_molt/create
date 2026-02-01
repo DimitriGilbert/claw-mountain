@@ -22,6 +22,7 @@ fi
 # @parseArger flag install-opencode "Install opencode for the molt user" --on
 # @parseArger flag install-gogcli "Install gogcli (Google Suite CLI) for the molt user" --on
 # @parseArger flag install-msmtp "Install msmtp (simple SMTP client) for the molt user" --on
+# @parseArger flag install-isync "Install isync (mbsync for IMAP) for the molt user" --on
 # @parseArger-declarations-end
 
 # @parseArger-utils
@@ -73,6 +74,7 @@ _arg_install_gemini="on"
 _arg_install_opencode="on"
 _arg_install_gogcli="on"
 _arg_install_msmtp="on"
+_arg_install_isync="on"
 # NESTED
 _verbose_level="0";
 
@@ -97,8 +99,9 @@ print_help()
 	echo -e "	--install-opencode|--no-install-opencode: Install opencode for the molt user, on by default (use --no-install-opencode to turn it off)"
 	echo -e "	--install-gogcli|--no-install-gogcli: Install gogcli (Google Suite CLI) for the molt user, on by default (use --no-install-gogcli to turn it off)"
 	echo -e "	--install-msmtp|--no-install-msmtp: Install msmtp (simple SMTP client) for the molt user, on by default (use --no-install-msmtp to turn it off)"
+	echo -e "	--install-isync|--no-install-isync: Install isync (mbsync for IMAP) for the molt user, on by default (use --no-install-isync to turn it off)"
 	echo -e "Usage :
-	$0 <name> [--port <value>] [--base-dir <value>] [--skill <value>] [--[no-]skip-user] [--[no-]verbose] [--[no-]install-parsearger] [--[no-]install-bun] [--[no-]install-gemini] [--[no-]install-opencode] [--[no-]install-gogcli] [--[no-]install-msmtp]";
+	$0 <name> [--port <value>] [--base-dir <value>] [--skill <value>] [--[no-]skip-user] [--[no-]verbose] [--[no-]install-parsearger] [--[no-]install-bun] [--[no-]install-gemini] [--[no-]install-opencode] [--[no-]install-gogcli] [--[no-]install-msmtp] [--[no-]install-isync]";
 	fi
 
 }
@@ -226,6 +229,12 @@ parse_commandline()
 			--no-install-msmtp)
 				_arg_install_msmtp="off"
 				;;
+			--install-isync)
+				_arg_install_isync="on"
+				;;
+			--no-install-isync)
+				_arg_install_isync="off"
+				;;
 			-h|--help)
 				print_help;
 				exit 0;
@@ -310,7 +319,8 @@ print_debug()
 	echo -e "	install-gemini: ${_arg_install_gemini}";
 	echo -e "	install-opencode: ${_arg_install_opencode}";
 	echo -e "	install-gogcli: ${_arg_install_gogcli}";
-	echo -e "	install-msmtp: ${_arg_install_msmtp}";
+	echo -e "\tinstall-msmtp: ${_arg_install_msmtp}";
+	echo -e "\tinstall-isync: ${_arg_install_isync}";
 
 }
 
@@ -512,6 +522,13 @@ else
   log "Note: msmtp not found - install with: sudo apt-get install msmtp" 2
 fi
 
+# Check isync (mbsync)
+if command -v mbsync &>/dev/null; then
+  log "mbsync (isync) available" 2
+else
+  log "Note: mbsync not found - install with: sudo apt-get install isync" 2
+fi
+
 # Install Node.js globally if not available
 log "Checking Node.js..." 1
 if ! command -v npm &>/dev/null; then
@@ -554,5 +571,10 @@ log "Next steps:" 1
 log "1. Setup OpenClaw: sudo -u $MOLT_NAME openclaw onboard" 0
 log "2. Start molt: ./clmnt molt start $MOLT_NAME" 0
 log "3. Check status: ./clmnt molt status $MOLT_NAME" 0
+log "" 0
+log "Mail Setup (optional):" 1
+log "1. Install dependencies: sudo apt-get install msmtp isync" 0
+log "2. Add email: ./clmnt molt mail add $MOLT_NAME <email> -p <password>" 0
+log "3. Check emails: ./clmnt molt mail check $MOLT_NAME" 0
 log "" 0
 log "Dashboard will be available at: http://127.0.0.1:$MOLT_PORT/" 1

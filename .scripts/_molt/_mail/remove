@@ -1,0 +1,430 @@
+#!/bin/bash
+# @parseArger-begin
+# @parseArger-help "Remove an email account from a molt" --option "help" --short-option "h"
+# @parseArger-verbose --option "verbose" --level "0" --quiet-option "quiet"
+_has_colors=0
+if [ -t 1 ]; then
+	ncolors=$(tput colors 2>/dev/null)
+	if [ -n "$ncolors" ] && [ "$ncolors" -ge 8 ]; then
+		_has_colors=1
+	fi
+fi
+# @parseArger-declarations
+# @parseArger pos name "Molt name"
+# @parseArger pos account "Account name to remove (use 'all' to remove all accounts)"
+# @parseArger flag yes "Skip confirmation prompt"
+# @parseArger flag keep-maildir "Keep Maildir folder after removal"
+# @parseArger-declarations-end
+
+# @parseArger-utils
+_helpHasBeenPrinted=1;
+_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)";
+# @parseArger-utils-end
+
+# @parseArger-parsing
+
+__cli_arg_count=$#;
+
+die()
+{
+	local _ret=1
+    if [[ -n "$2" ]] && [[ "$2" =~ ^[0-9]+$ ]]; then
+   	_ret="$2"
+    fi
+	test "${_PRINT_HELP:-no}" = yes && print_help >&2
+	log "$1" -3 >&2
+	exit "${_ret}"
+}
+
+
+begins_with_short_option()
+{
+	local first_option all_short_options=''
+	first_option="${1:0:1}"
+	test "$all_short_options" = "${all_short_options/$first_option/}" && return 1 || return 0
+}
+
+# POSITIONALS ARGUMENTS
+_positionals=();
+_optional_positionals=();
+_arg_name="";
+_arg_account="";
+# OPTIONALS ARGUMENTS
+# FLAGS
+_arg_yes="off"
+_arg_keep_maildir="off"
+# NESTED
+_verbose_level="0";
+
+
+
+print_help()
+{
+	_triggerSCHelp=1;
+
+	if [[ "$_helpHasBeenPrinted" == "1" ]]; then
+		_helpHasBeenPrinted=0;
+		echo -e "Remove an email account from a molt:"
+	echo -e "	name: Molt name"
+	echo -e "	account: Account name to remove (use 'all' to remove all accounts)"
+	echo -e "	--yes: Skip confirmation prompt"
+	echo -e "	--keep-maildir: Keep Maildir folder after removal"
+	echo -e "Usage :
+	$0 <name> <account> [options]";
+	fi
+
+}
+
+log() {
+	local _arg_msg="${1}";
+	local _arg_level="${2:-0}";
+	if [ "${_arg_level}" -le "${_verbose_level}" ]; then
+		case "$_arg_level" in
+			-3)
+				_arg_COLOR="\033[0;31m";
+				;;
+			-2)
+				_arg_COLOR="\033[0;33m";
+				;;
+			-1)
+				_arg_COLOR="\033[1;33m";
+				;;
+			1)
+				_arg_COLOR="\033[0;32m";
+				;;
+			2)
+				_arg_COLOR="\033[1;36m";
+				;;
+			3)
+				_arg_COLOR="\033[0;36m";
+				;;
+			*)
+				_arg_COLOR="\033[0m";
+				;;
+		esac
+		if [ "${_has_colors}" == "1" ]; then
+			echo -e "${_arg_COLOR}${_arg_msg}\033[0m";
+		else
+			echo "${_arg_msg}";
+		fi
+	fi
+}
+
+parse_commandline()
+{
+	_positionals_count=0
+	while test $# -gt 0
+	do
+		_key="$1"
+		case "$_key" in
+			--yes)
+				_arg_yes="on"
+				;;
+			--no-yes)
+				_arg_yes="off"
+				;;
+			--keep-maildir)
+				_arg_keep_maildir="on"
+				;;
+			--no-keep-maildir)
+				_arg_keep_maildir="off"
+				;;
+			-h|--help)
+				print_help;
+				exit 0;
+				;;
+			-h*)
+				print_help;
+				exit 0;
+				;;
+			--verbose)
+				if [ $# -lt 2 ];then
+					_verbose_level="$((_verbose_level + 1))";
+				else
+					_verbose_level="$2";
+					shift;
+				fi
+				;;
+			--quiet)
+				if [ $# -lt 2 ];then
+					_verbose_level="$((_verbose_level - 1))";
+				else
+					_verbose_level="-$2";
+					shift;
+				fi
+				;;
+			
+				*)
+				_last_positional="$1"
+				_positionals+=("$_last_positional")
+				_positionals_count=$((_positionals_count + 1))
+				;;
+		esac
+		shift
+	done
+}
+
+
+handle_passed_args_count()
+{
+	local _required_args_string="name account"
+	if [ "${_positionals_count}" -gt 2 ] && [ "$_helpHasBeenPrinted" == "1" ];then
+		_PRINT_HELP=yes die "FATAL ERROR: There were spurious positional arguments --- we expect at most 2 (namely: $_required_args_string), but got ${_positionals_count} (the last one was: '${_last_positional}').\n\t${_positionals[*]}" 1
+	fi
+	if [ "${_positionals_count}" -lt 2 ] && [ "$_helpHasBeenPrinted" == "1" ];then
+		_PRINT_HELP=yes die "FATAL ERROR: Not enough positional arguments - we require at least 2 (namely: $_required_args_string), but got only ${_positionals_count}.
+	${_positionals[*]}" 1;
+	fi
+}
+
+
+assign_positional_args()
+{
+	local _positional_name _shift_for=$1;
+	_positional_names="_arg_name _arg_account ";
+	shift "$_shift_for"
+	for _positional_name in ${_positional_names};do
+		test $# -gt 0 || break;
+		eval "if [ \"\$_one_of${_positional_name}\" != \"\" ];then [[ \"\${_one_of${_positional_name}[*]}\" =~ \"\${1}\" ]];fi" || die "${_positional_name} must be one of: $(eval "echo \"\${_one_of${_positional_name}[*]}\"")" 1;
+		local _match_var="_match${_positional_name}";
+		local _regex="${!_match_var}";
+		if [ -n "$_regex" ]; then
+			[[ "${1}" =~ $_regex ]] || die "${_positional_name} does not match pattern: $_regex"
+		fi
+		eval "$_positional_name=\${1}" || die "Error during argument parsing, possibly an ParseArger bug." 1;
+		shift;
+	done
+}
+
+print_debug()
+{
+	print_help
+	# shellcheck disable=SC2145
+	echo "DEBUG: $0 $@";
+	
+	echo -e "\tname: ${_arg_name}";
+	echo -e "\taccount: ${_arg_account}";
+	echo -e "\tyes: ${_arg_yes}";
+	echo -e "\tkeep-maildir: ${_arg_keep_maildir}";
+
+}
+
+
+on_interrupt() {
+	die Process aborted! 130;
+}
+
+
+parse_commandline "$@";
+handle_passed_args_count;
+assign_positional_args 1 "${_positionals[@]}";
+trap on_interrupt INT;
+
+
+
+# @parseArger-parsing-end
+# print_debug "$@"
+# @parseArger-end
+
+# Main script logic
+
+MOLT_NAME="$_arg_name"
+ACCOUNT="$_arg_account"
+
+# Get project root
+_PROJECT_ROOT="$(cd "$_SCRIPT_DIR/../../../.." && pwd)"
+BASE_DIR="$_PROJECT_ROOT"
+MOLT_HOME="$BASE_DIR/$MOLT_NAME"
+
+# Validate molt exists
+if [ ! -d "$MOLT_HOME" ]; then
+	die "Molt '$MOLT_NAME' does not exist at $MOLT_HOME" 1
+fi
+
+# Check molt user exists
+if ! id "$MOLT_NAME" &>/dev/null; then
+	die "User '$MOLT_NAME' does not exist" 1
+fi
+
+MSMTPRC="$MOLT_HOME/.msmtprc"
+MBSYNCRC="$MOLT_HOME/.mbsyncrc"
+MAILDIR_BASE="$MOLT_HOME/Maildir"
+
+# Function to remove a single account
+remove_account() {
+	local acc_name="$1"
+	local acc_email="$2"
+	
+	log "Removing account: $acc_name" 1
+	
+	# Remove from msmtprc
+	if [ -f "$MSMTPRC" ]; then
+		# Create a temporary file without the account
+		sudo -u "$MOLT_NAME" awk -v account="$acc_name" '
+			/^account / { in_account = ($2 == account) }
+			!in_account { print }
+		' "$MSMTPRC" > "/tmp/msmtprc.tmp.$$"
+		
+		# Check if account was found
+		if [ "$(wc -l < "/tmp/msmtprc.tmp.$$")" -eq "$(wc -l < "$MSMTPRC")" ]; then
+			log "Account '$acc_name' not found in msmtprc" -1
+			rm -f "/tmp/msmtprc.tmp.$$"
+			return 1
+		fi
+		
+		# Also remove default line if this was the default
+		grep -v "^default $acc_name$" "/tmp/msmtprc.tmp.$$" > "/tmp/msmtprc.tmp2.$$"
+		mv "/tmp/msmtprc.tmp2.$$" "/tmp/msmtprc.tmp.$$"
+		
+		# Move temp file back
+		sudo mv "/tmp/msmtprc.tmp.$$" "$MSMTPRC"
+		sudo chown "$MOLT_NAME:$MOLT_NAME" "$MSMTPRC"
+		sudo chmod 600 "$MSMTPRC"
+		log "Removed from msmtprc" 2
+	fi
+	
+	# Remove from mbsyncrc
+	if [ -f "$MBSYNCRC" ]; then
+		# Create a temporary file without the account sections
+		sudo -u "$MOLT_NAME" awk -v account="$acc_name" '
+			/^# Account: / { in_account = ($3 == account) }
+			/^IMAPAccount / { in_account = ($2 == account) }
+			/^IMAPStore / { 
+				# Check if this store belongs to the account
+				gsub(/-remote$/, "", $2)
+				in_account = ($2 == account)
+			}
+			/^MaildirStore / {
+				gsub(/-local$/, "", $2)
+				in_account = ($2 == account)
+			}
+			/^Channel / {
+				in_account = ($2 == account)
+			}
+			!in_account || /^$/ { print }
+		' "$MBSYNCRC" > "/tmp/mbsyncrc.tmp.$$"
+		
+		# Remove empty lines at the beginning
+		sed -i '/./,$!d' "/tmp/mbsyncrc.tmp.$$"
+		
+		# Move temp file back
+		sudo mv "/tmp/mbsyncrc.tmp.$$" "$MBSYNCRC"
+		sudo chown "$MOLT_NAME:$MOLT_NAME" "$MBSYNCRC"
+		sudo chmod 600 "$MBSYNCRC"
+		log "Removed from mbsyncrc" 2
+	fi
+	
+	# Remove Maildir
+	if [ "$_arg_keep_maildir" = "off" ]; then
+		ACCOUNT_MAILDIR="$MAILDIR_BASE/$acc_name"
+		if [ -d "$ACCOUNT_MAILDIR" ]; then
+			sudo rm -rf "$ACCOUNT_MAILDIR"
+			log "Removed Maildir: $ACCOUNT_MAILDIR" 2
+		fi
+	fi
+	
+	return 0
+}
+
+# Function to get list of accounts from msmtprc
+get_accounts() {
+	if [ -f "$MSMTPRC" ]; then
+		grep "^account " "$MSMTPRC" | awk '{print $2}' | grep -v "^default$"
+	fi
+}
+
+# Handle 'all' option
+if [ "$ACCOUNT" = "all" ]; then
+	ACCOUNTS=$(get_accounts)
+	
+	if [ -z "$ACCOUNTS" ]; then
+		log "No accounts found to remove" -1
+		exit 0
+	fi
+	
+	ACCOUNT_COUNT=$(echo "$ACCOUNTS" | wc -l)
+	
+	if [ "$_arg_yes" = "off" ]; then
+		echo ""
+		echo "The following accounts will be removed from molt '$MOLT_NAME':"
+		echo "$ACCOUNTS" | while read -r acc; do
+			echo "  - $acc"
+		done
+		echo ""
+		read -p "Are you sure? [y/N] " -n 1 -r
+		echo ""
+		if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+			die "Aborted" 0
+		fi
+	fi
+	
+	log "Removing all $ACCOUNT_COUNT accounts..." 1
+	
+	# Track if any failures
+	FAILED=0
+	echo "$ACCOUNTS" | while read -r acc; do
+		if ! remove_account "$acc"; then
+			FAILED=1
+		fi
+	done
+	
+	# Remove Maildir base if empty
+	if [ "$_arg_keep_maildir" = "off" ] && [ -d "$MAILDIR_BASE" ]; then
+		if [ -z "$(ls -A "$MAILDIR_BASE" 2>/dev/null)" ]; then
+			sudo rmdir "$MAILDIR_BASE"
+			log "Removed empty Maildir base" 2
+		fi
+	fi
+	
+	log "" 0
+	log "All accounts removed successfully!" 1
+	
+else
+	# Remove single account
+	
+	# Get email for confirmation
+	if [ -f "$MSMTPRC" ]; then
+		EMAIL=$(sed -n "/^account $ACCOUNT$/,/^$/p" "$MSMTPRC" | grep "^from " | awk '{print $2}')
+	fi
+	
+	if [ -z "$EMAIL" ]; then
+		die "Account '$ACCOUNT' not found in configuration" 1
+	fi
+	
+	if [ "$_arg_yes" = "off" ]; then
+		echo ""
+		echo "Account: $ACCOUNT ($EMAIL)"
+		echo "Molt: $MOLT_NAME"
+		if [ "$_arg_keep_maildir" = "on" ]; then
+			echo "Maildir will be kept: $MAILDIR_BASE/$ACCOUNT"
+		else
+			echo "Maildir will be removed: $MAILDIR_BASE/$ACCOUNT"
+		fi
+		echo ""
+		read -p "Are you sure you want to remove this account? [y/N] " -n 1 -r
+		echo ""
+		if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+			die "Aborted" 0
+		fi
+	fi
+	
+	if remove_account "$ACCOUNT" "$EMAIL"; then
+		# Check if we need to set a new default
+		if [ -f "$MSMTPRC" ]; then
+			REMAINING_ACCOUNTS=$(get_accounts)
+			if [ -n "$REMAINING_ACCOUNTS" ]; then
+				# Check if there's no default set
+				if ! grep -q "^default " "$MSMTPRC"; then
+					NEW_DEFAULT=$(echo "$REMAINING_ACCOUNTS" | head -1)
+					echo "default $NEW_DEFAULT" | sudo -u "$MOLT_NAME" tee -a "$MSMTPRC" > /dev/null
+					log "Set new default account: $NEW_DEFAULT" 1
+				fi
+			fi
+		fi
+		
+		log "" 0
+		log "Account removed successfully!" 1
+	else
+		die "Failed to remove account" 1
+	fi
+fi

@@ -1,0 +1,579 @@
+#!/bin/bash
+# @parseArger-begin
+# @parseArger-help "Check email accounts and sync inbox" --option "help" --short-option "h"
+# @parseArger-verbose --option "verbose" --level "0" --quiet-option "quiet"
+_has_colors=0
+if [ -t 1 ]; then
+	ncolors=$(tput colors 2>/dev/null)
+	if [ -n "$ncolors" ] && [ "$ncolors" -ge 8 ]; then
+		_has_colors=1
+	fi
+fi
+# @parseArger-declarations
+# @parseArger pos name "Molt name"
+# @parseArger opt account "Specific account to check (default: all)" --short a
+# @parseArger opt limit "Number of latest emails to show per account" --short l --default-value "10"
+# @parseArger flag no-sync "Skip syncing with server (show cached only)"
+# @parseArger flag test-smtp "Send a test email via SMTP" --short t
+# @parseArger opt test-recipient "Recipient for test email" --short r
+# @parseArger flag list "List all configured accounts only"
+# @parseArger-declarations-end
+
+# @parseArger-utils
+_helpHasBeenPrinted=1;
+_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)";
+# @parseArger-utils-end
+
+# @parseArger-parsing
+
+__cli_arg_count=$#;
+
+die()
+{
+	local _ret=1
+    if [[ -n "$2" ]] && [[ "$2" =~ ^[0-9]+$ ]]; then
+   	_ret="$2"
+    fi
+	test "${_PRINT_HELP:-no}" = yes && print_help >&2
+	log "$1" -3 >&2
+	exit "${_ret}"
+}
+
+
+begins_with_short_option()
+{
+	local first_option all_short_options=''
+	first_option="${1:0:1}"
+	test "$all_short_options" = "${all_short_options/$first_option/}" && return 1 || return 0
+}
+
+# POSITIONALS ARGUMENTS
+_positionals=();
+_optional_positionals=();
+_arg_name="";
+# OPTIONALS ARGUMENTS
+_arg_account=
+_arg_limit="10"
+_arg_test_recipient=
+# FLAGS
+_arg_no_sync="off"
+_arg_test_smtp="off"
+_arg_list="off"
+# NESTED
+_verbose_level="0";
+
+
+
+print_help()
+{
+	_triggerSCHelp=1;
+
+	if [[ "$_helpHasBeenPrinted" == "1" ]]; then
+		_helpHasBeenPrinted=0;
+		echo -e "Check email accounts and sync inbox:"
+	echo -e "	name: Molt name"
+	echo -e "	-a, --account <name>: Specific account to check (default: all)"
+	echo -e "	-l, --limit <num>: Number of latest emails to show per account [default: '10']"
+	echo -e "	--no-sync: Skip syncing with server (show cached only)"
+	echo -e "	-t, --test-smtp: Send a test email via SMTP"
+	echo -e "	-r, --test-recipient <email>: Recipient for test email"
+	echo -e "	--list: List all configured accounts only"
+	echo -e "Usage :
+	$0 <name> [options]";
+	fi
+
+}
+
+log() {
+	local _arg_msg="${1}";
+	local _arg_level="${2:-0}";
+	if [ "${_arg_level}" -le "${_verbose_level}" ]; then
+		case "$_arg_level" in
+			-3)
+				_arg_COLOR="\033[0;31m";
+				;;
+			-2)
+				_arg_COLOR="\033[0;33m";
+				;;
+			-1)
+				_arg_COLOR="\033[1;33m";
+				;;
+			1)
+				_arg_COLOR="\033[0;32m";
+				;;
+			2)
+				_arg_COLOR="\033[1;36m";
+				;;
+			3)
+				_arg_COLOR="\033[0;36m";
+				;;
+			*)
+				_arg_COLOR="\033[0m";
+				;;
+		esac
+		if [ "${_has_colors}" == "1" ]; then
+			echo -e "${_arg_COLOR}${_arg_msg}\033[0m";
+		else
+			echo "${_arg_msg}";
+		fi
+	fi
+}
+
+parse_commandline()
+{
+	_positionals_count=0
+	while test $# -gt 0
+	do
+		_key="$1"
+		case "$_key" in
+			-a|--account)
+				test $# -lt 2 && die "Missing value for the option: '$_key'" 1
+				_arg_account="$2"
+				shift
+				;;
+			--account=*)
+				_arg_account="${_key##--account=}"
+				;;
+			-a*)
+				_arg_account="${_key##-a}"
+				;;
+			
+			-l|--limit)
+				test $# -lt 2 && die "Missing value for the option: '$_key'" 1
+				_arg_limit="$2"
+				shift
+				;;
+			--limit=*)
+				_arg_limit="${_key##--limit=}"
+				;;
+			-l*)
+				_arg_limit="${_key##-l}"
+				;;
+			
+			-r|--test-recipient)
+				test $# -lt 2 && die "Missing value for the option: '$_key'" 1
+				_arg_test_recipient="$2"
+				shift
+				;;
+			--test-recipient=*)
+				_arg_test_recipient="${_key##--test-recipient=}"
+				;;
+			-r*)
+				_arg_test_recipient="${_key##-r}"
+				;;
+			
+			--sync)
+				_arg_no_sync="off"
+				;;
+			--no-sync)
+				_arg_no_sync="on"
+				;;
+			--test-smtp)
+				_arg_test_smtp="on"
+				;;
+			--no-test-smtp)
+				_arg_test_smtp="off"
+				;;
+			--list)
+				_arg_list="on"
+				;;
+			--no-list)
+				_arg_list="off"
+				;;
+			-h|--help)
+				print_help;
+				exit 0;
+				;;
+			-h*)
+				print_help;
+				exit 0;
+				;;
+			--verbose)
+				if [ $# -lt 2 ];then
+					_verbose_level="$((_verbose_level + 1))";
+				else
+					_verbose_level="$2";
+					shift;
+				fi
+				;;
+			--quiet)
+				if [ $# -lt 2 ];then
+					_verbose_level="$((_verbose_level - 1))";
+				else
+					_verbose_level="-$2";
+					shift;
+				fi
+				;;
+			
+				*)
+				_last_positional="$1"
+				_positionals+=("$_last_positional")
+				_positionals_count=$((_positionals_count + 1))
+				;;
+		esac
+		shift
+	done
+}
+
+
+handle_passed_args_count()
+{
+	local _required_args_string="name"
+	if [ "${_positionals_count}" -gt 1 ] && [ "$_helpHasBeenPrinted" == "1" ];then
+		_PRINT_HELP=yes die "FATAL ERROR: There were spurious positional arguments --- we expect at most 1 (namely: $_required_args_string), but got ${_positionals_count} (the last one was: '${_last_positional}').\n\t${_positionals[*]}" 1
+	fi
+	if [ "${_positionals_count}" -lt 1 ] && [ "$_helpHasBeenPrinted" == "1" ];then
+		_PRINT_HELP=yes die "FATAL ERROR: Not enough positional arguments - we require at least 1 (namely: $_required_args_string), but got only ${_positionals_count}.
+	${_positionals[*]}" 1;
+	fi
+}
+
+
+assign_positional_args()
+{
+	local _positional_name _shift_for=$1;
+	_positional_names="_arg_name ";
+	shift "$_shift_for"
+	for _positional_name in ${_positional_names};do
+		test $# -gt 0 || break;
+		eval "if [ \"\$_one_of${_positional_name}\" != \"\" ];then [[ \"\${_one_of${_positional_name}[*]}\" =~ \"\${1}\" ]];fi" || die "${_positional_name} must be one of: $(eval "echo \"\${_one_of${_positional_name}[*]}\"")" 1;
+		local _match_var="_match${_positional_name}";
+		local _regex="${!_match_var}";
+		if [ -n "$_regex" ]; then
+			[[ "${1}" =~ $_regex ]] || die "${_positional_name} does not match pattern: $_regex"
+		fi
+		eval "$_positional_name=\${1}" || die "Error during argument parsing, possibly an ParseArger bug." 1;
+		shift;
+	done
+}
+
+print_debug()
+{
+	print_help
+	# shellcheck disable=SC2145
+	echo "DEBUG: $0 $@";
+	
+	echo -e "\tname: ${_arg_name}";
+	echo -e "\taccount: ${_arg_account}";
+	echo -e "\tlimit: ${_arg_limit}";
+	echo -e "\tno-sync: ${_arg_no_sync}";
+	echo -e "\ttest-smtp: ${_arg_test_smtp}";
+	echo -e "\ttest-recipient: ${_arg_test_recipient}";
+	echo -e "\tlist: ${_arg_list}";
+
+}
+
+
+on_interrupt() {
+	die Process aborted! 130;
+}
+
+
+parse_commandline "$@";
+handle_passed_args_count;
+assign_positional_args 1 "${_positionals[@]}";
+trap on_interrupt INT;
+
+
+
+# @parseArger-parsing-end
+# print_debug "$@"
+# @parseArger-end
+
+# Main script logic
+
+MOLT_NAME="$_arg_name"
+TARGET_ACCOUNT="$_arg_account"
+LIMIT="$_arg_limit"
+
+# Get project root
+_PROJECT_ROOT="$(cd "$_SCRIPT_DIR/../../../.." && pwd)"
+BASE_DIR="$_PROJECT_ROOT"
+MOLT_HOME="$BASE_DIR/$MOLT_NAME"
+
+# Validate molt exists
+if [ ! -d "$MOLT_HOME" ]; then
+	die "Molt '$MOLT_NAME' does not exist at $MOLT_HOME" 1
+fi
+
+# Check molt user exists
+if ! id "$MOLT_NAME" &>/dev/null; then
+	die "User '$MOLT_NAME' does not exist" 1
+fi
+
+MSMTPRC="$MOLT_HOME/.msmtprc"
+MBSYNCRC="$MOLT_HOME/.mbsyncrc"
+MAILDIR_BASE="$MOLT_HOME/Maildir"
+
+# Function to get account info from msmtprc
+get_account_info() {
+	local acc_name="$1"
+	local email=""
+	local host=""
+	local is_default=""
+	
+	if [ -f "$MSMTPRC" ]; then
+		# Extract account block
+		local in_account=0
+		while IFS= read -r line; do
+			if [[ "$line" =~ ^account[[:space:]]+([^[:space:]]+) ]]; then
+				if [ "${BASH_REMATCH[1]}" = "$acc_name" ]; then
+					in_account=1
+					if grep -q "^default $acc_name$" "$MSMTPRC"; then
+						is_default="*"
+					fi
+				else
+					in_account=0
+				fi
+			elif [ $in_account -eq 1 ]; then
+				if [[ "$line" =~ ^from[[:space:]]+(.+) ]]; then
+					email="${BASH_REMATCH[1]}"
+				elif [[ "$line" =~ ^host[[:space:]]+(.+) ]]; then
+					host="${BASH_REMATCH[1]}"
+				elif [ -z "$line" ]; then
+					break
+				fi
+			fi
+		done < "$MSMTPRC"
+	fi
+	
+	echo "${email:-N/A}|${host:-N/A}|$is_default"
+}
+
+# Function to count new messages in Maildir
+count_new_messages() {
+	local acc_name="$1"
+	local maildir="$MAILDIR_BASE/$acc_name"
+	
+	if [ -d "$maildir" ]; then
+		# Count all files in new/ subdirectories
+		find "$maildir" -type d -name "new" -exec find {} -type f \; 2>/dev/null | wc -l
+	else
+		echo "0"
+	fi
+}
+
+# Function to count total messages
+count_total_messages() {
+	local acc_name="$1"
+	local maildir="$MAILDIR_BASE/$acc_name"
+	
+	if [ -d "$maildir" ]; then
+		# Count all files in cur/ and new/ subdirectories
+		find "$maildir" -type d \( -name "cur" -o -name "new" \) -exec find {} -type f \; 2>/dev/null | wc -l
+	else
+		echo "0"
+	fi
+}
+
+# Function to get latest emails from Maildir
+get_latest_emails() {
+	local acc_name="$1"
+	local limit="$2"
+	local maildir="$MAILDIR_BASE/$acc_name"
+	
+	if [ ! -d "$maildir" ]; then
+		return
+	fi
+	
+	# Find all email files in cur/ and new/ directories, sort by modification time, take latest
+	find "$maildir" -type d \( -name "cur" -o -name "new" \) -exec find {} -type f -printf '%T@ %p\n' \; 2>/dev/null | \
+		sort -rn | head -n "$limit" | while read -r mtime filepath; do
+			# Parse the email file
+			local subject=""
+			local from=""
+			local date=""
+			local new_mark=""
+			
+			# Check if it's in the 'new' folder
+			if [[ "$filepath" == */new/* ]]; then
+				new_mark=" [NEW]"
+			fi
+			
+			# Extract headers
+			while IFS= read -r line; do
+				# Stop at empty line (end of headers)
+				[ -z "$line" ] && break
+				
+				if [[ "$line" =~ ^Subject:[[:space:]]*(.+) ]]; then
+					subject="${BASH_REMATCH[1]}"
+				elif [[ "$line" =~ ^From:[[:space:]]*(.+) ]]; then
+					from="${BASH_REMATCH[1]}"
+					# Remove email angle brackets for cleaner display
+					from=$(echo "$from" | sed 's/<[^>]*>//g' | sed 's/"//g' | xargs)
+				elif [[ "$line" =~ ^Date:[[:space:]]*(.+) ]]; then
+					date="${BASH_REMATCH[1]}"
+				fi
+			done < "$filepath"
+			
+			# Format date nicely (just the date part)
+			date=$(echo "$date" | sed 's/^[[:space:]]*//' | cut -d',' -f1 | head -c 20)
+			
+			# Truncate long subjects
+			if [ ${#subject} -gt 50 ]; then
+				subject="${subject:0:47}..."
+			fi
+			
+			# Format output
+			printf "  %-20s | %-25s | %s%s\n" "${date:-N/A}" "${from:-N/A}" "${subject:-(no subject)}" "$new_mark"
+		done
+}
+
+# Get list of accounts
+get_accounts() {
+	if [ -f "$MSMTPRC" ]; then
+		grep "^account " "$MSMTPRC" | awk '{print $2}' | grep -v "^default$"
+	fi
+}
+
+# List mode
+if [ "$_arg_list" = "on" ]; then
+	log "Configured email accounts for molt: $MOLT_NAME" 1
+	log "" 0
+	
+	ACCOUNTS=$(get_accounts)
+	if [ -z "$ACCOUNTS" ]; then
+		log "No email accounts configured" -1
+		exit 0
+	fi
+	
+	echo "  Account                | Email Address           | SMTP Server       | Default"
+	echo "  ---------------------- | ----------------------- | ----------------- | -------"
+	
+	echo "$ACCOUNTS" | while read -r acc; do
+		info=$(get_account_info "$acc")
+		IFS='|' read -r email host is_default <<< "$info"
+		printf "  %-22s | %-23s | %-17s | %s\n" "$acc" "$email" "$host" "$is_default"
+	done
+	
+	log "" 0
+	exit 0
+fi
+
+# Test SMTP mode
+if [ "$_arg_test_smtp" = "on" ]; then
+	RECIPIENT="$_arg_test_recipient"
+	
+	if [ -z "$RECIPIENT" ]; then
+		die "Test recipient required. Use -r or --test-recipient" 1
+	fi
+	
+	log "Sending test email to: $RECIPIENT" 1
+	
+	# Determine which account to use
+	if [ -n "$TARGET_ACCOUNT" ]; then
+		ACCOUNT="$TARGET_ACCOUNT"
+		if ! grep -q "^account $ACCOUNT$" "$MSMTPRC" 2>/dev/null; then
+			die "Account '$ACCOUNT' not found" 1
+		fi
+	else
+		# Use default account
+		ACCOUNT=$(grep "^default " "$MSMTPRC" 2>/dev/null | awk '{print $2}')
+		if [ -z "$ACCOUNT" ]; then
+			# Get first account
+			ACCOUNT=$(get_accounts | head -1)
+		fi
+	fi
+	
+	if [ -z "$ACCOUNT" ]; then
+		die "No email account configured" 1
+	fi
+	
+	log "Using account: $ACCOUNT" 2
+	
+	# Send test email
+	TEST_EMAIL="Subject: Test Email from $MOLT_NAME
+From: $(get_account_info "$ACCOUNT" | cut -d'|' -f1)
+To: $RECIPIENT
+
+This is a test email sent from molt: $MOLT_NAME
+Account: $ACCOUNT
+Time: $(date)
+
+If you received this, your SMTP configuration is working correctly!"
+
+	if echo "$TEST_EMAIL" | sudo -u "$MOLT_NAME" msmtp -a "$ACCOUNT" "$RECIPIENT"; then
+		log "" 0
+		log "Test email sent successfully!" 1
+	else
+		die "Failed to send test email" 1
+	fi
+	
+	exit 0
+fi
+
+# Sync and check mode
+log "Checking email accounts for molt: $MOLT_NAME" 1
+log "" 0
+
+# Get accounts to check
+if [ -n "$TARGET_ACCOUNT" ]; then
+	ACCOUNTS="$TARGET_ACCOUNT"
+	if ! echo "$ACCOUNTS" | grep -q "^account $TARGET_ACCOUNT$" "$MSMTPRC" 2>/dev/null && \
+	   ! grep -q "^account $TARGET_ACCOUNT$" "$MSMTPRC" 2>/dev/null; then
+		die "Account '$TARGET_ACCOUNT' not found in configuration" 1
+	fi
+else
+	ACCOUNTS=$(get_accounts)
+fi
+
+if [ -z "$ACCOUNTS" ]; then
+	log "No email accounts configured" -1
+	log "Add an account with: ./clmnt molt mail add $MOLT_NAME <email> -p <password>" 0
+	exit 0
+fi
+
+# Sync emails if not disabled
+if [ "$_arg_no_sync" = "off" ]; then
+	if [ -f "$MBSYNCRC" ]; then
+		log "Syncing emails with server..." 1
+		
+		if [ -n "$TARGET_ACCOUNT" ]; then
+			# Sync specific account
+			sudo -u "$MOLT_NAME" mbsync -c "$MBSYNCRC" "$TARGET_ACCOUNT" 2>&1 | while read -r line; do
+				log "$line" 3
+			done
+		else
+			# Sync all accounts
+			sudo -u "$MOLT_NAME" mbsync -c "$MBSYNCRC" -a 2>&1 | while read -r line; do
+				log "$line" 3
+			done
+		fi
+		
+		log "Sync complete" 1
+		log "" 0
+	else
+		log "No mbsync configuration found" -1
+	fi
+else
+	log "Skipping sync (using cached emails)" 2
+fi
+
+# Display account summaries and latest emails
+echo "$ACCOUNTS" | while read -r acc; do
+	info=$(get_account_info "$acc")
+	IFS='|' read -r email host is_default <<< "$info"
+	
+	new_count=$(count_new_messages "$acc")
+	total_count=$(count_total_messages "$acc")
+	
+	log "═══════════════════════════════════════════════════════════" 0
+	log "Account: $acc ${is_default:+[DEFAULT]}" 1
+	log "  Email: $email" 0
+	log "  Messages: $new_count new, $total_count total" 0
+	log "" 0
+	
+	# Show latest emails
+	if [ "$total_count" -gt 0 ]; then
+		log "Latest $LIMIT emails:" 2
+		printf "  %-20s | %-25s | %s\n" "Date" "From" "Subject"
+		printf "  %-20s | %-25s | %s\n" "--------------------" "-------------------------" "------------------------------"
+		get_latest_emails "$acc" "$LIMIT"
+	else
+		log "  No messages yet (sync may be needed)" 0
+	fi
+	
+	log "" 0
+done
+
+log "═══════════════════════════════════════════════════════════" 0
