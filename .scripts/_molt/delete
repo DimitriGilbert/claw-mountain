@@ -322,6 +322,12 @@ if [ -f "/home/$MOLT_NAME/.config/systemd/user/openclaw.service" ]; then
   sudo -u "$MOLT_NAME" systemctl --user daemon-reload 2>/dev/null || true
 fi
 
+# Disable systemd user lingering
+if command -v loginctl &>/dev/null; then
+  log "Disabling systemd user lingering for $MOLT_NAME..." 1
+  sudo loginctl disable-linger "$MOLT_NAME" 2>/dev/null || log "Linger not enabled or already disabled" 2
+fi
+
 # Remove user (if exists)
 if id "$MOLT_NAME" &>/dev/null; then
   log "Removing user '$MOLT_NAME'..." 1
