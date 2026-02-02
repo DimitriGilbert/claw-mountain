@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { Button } from './ui/Button';
+import type { BroadcastRecipient } from '../types';
 
 interface BroadcastPanelProps {
   onBroadcast: () => void;
@@ -11,21 +13,21 @@ export function BroadcastPanel({ onBroadcast }: BroadcastPanelProps) {
 
   const handleBroadcast = async () => {
     if (!message.trim()) return;
-    
+
     setSending(true);
     setResult(null);
-    
+
     try {
       const response = await fetch('/api/broadcast', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: message.trim() })
       });
-      
-      const data = await response.json();
-      
+
+      const data: { recipients?: BroadcastRecipient[] } = await response.json();
+
       if (data.recipients) {
-        const successful = data.recipients.filter((r: any) => r.status === 'sent').length;
+        const successful = data.recipients.filter((r) => r.status === 'sent').length;
         setResult({ success: true, recipients: successful });
         setMessage('');
         onBroadcast();
@@ -41,36 +43,39 @@ export function BroadcastPanel({ onBroadcast }: BroadcastPanelProps) {
 
   return (
     <div className="bg-bg-secondary p-6 rounded-lg border border-border-primary">
-      <h3 className="text-lg font-semibold text-text-primary mb-3">📢 Broadcast Message</h3>
-      <p className="text-text-secondary text-sm mb-4">
+      <h3 className="text-lg font-semibold text-text-primary mb-3 font-display">📢 Broadcast Message</h3>
+      <p className="text-text-secondary text-sm mb-4 leading-relaxed">
         Send a message to all running molts simultaneously via isolated sessions.
       </p>
-      
+
       <textarea
         value={message}
         onChange={(e) => setMessage(e.target.value)}
         placeholder="Enter message to broadcast to all active molts..."
         rows={4}
         disabled={sending}
-        className="w-full px-3 py-2 bg-bg-input border border-border-secondary rounded text-text-primary placeholder:text-text-muted focus:outline-none focus:border-action-primary mb-4 resize-y disabled:opacity-50"
+        className="w-full px-4 py-3 bg-bg-input border border-border-secondary rounded-lg text-text-primary placeholder:text-text-muted focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 focus:ring-offset-2 focus:ring-offset-bg-secondary mb-4 resize-y disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-[var(--transition-base)] font-terminal text-sm"
       />
-      
-      <button 
-        type="button"
-        className="w-full px-4 py-2 bg-action-secondary text-text-inverse rounded font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+
+      <Button
+        variant="secondary"
         onClick={handleBroadcast}
         disabled={sending || !message.trim()}
+        loading={sending}
+        className="w-full"
       >
         {sending ? 'Sending...' : 'Broadcast'}
-      </button>
-      
+      </Button>
+
       {result && (
-        <div className={`mt-4 px-3 py-2 rounded text-sm ${
-          result.success ? 'bg-status-success/20 text-status-success-text border border-status-success/30' : 'bg-status-error/20 text-status-error-text border border-status-error/30'
+        <div className={`mt-4 px-4 py-3 rounded-lg text-sm border ${
+          result.success
+            ? 'bg-status-success-bg text-status-success-text border-status-success/30'
+            : 'bg-status-error-bg text-status-error-text border-status-error/30'
         }`}>
-          {result.success 
-            ? `✅ Message sent to ${result.recipients} molts`
-            : '❌ Failed to broadcast message'
+          {result.success
+            ? `✓ Message sent to ${result.recipients} molts`
+            : '✗ Failed to broadcast message'
           }
         </div>
       )}

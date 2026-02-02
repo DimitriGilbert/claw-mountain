@@ -56,3 +56,16 @@ export interface MoltHealth {
   loading: boolean;
   error: string | null;
 }
+
+export interface BroadcastRecipient {
+  name: string;
+  status: 'sent' | 'failed';
+  error?: string;
+}
+
+export interface BroadcastResponse {
+  recipients: BroadcastRecipient[];
+  total: number;
+  successful: number;
+  failed: number;
+}

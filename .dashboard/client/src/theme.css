@@ -9,129 +9,151 @@
 
 :root {
   /* ----------------------------------------------------------------
-     Base Colors - The foundation
-     These are the raw color values, rarely used directly
+     ARTISTIC DIRECTION: "Soft Terminal Modernism"
+     Fusion of terminal-inspired minimalism with modern SaaS
+     ---------------------------------------------------------------- */
+
+  /* ----------------------------------------------------------------
+     BASE COLORS
      ---------------------------------------------------------------- */
   --color-white: #ffffff;
-  --color-black: #000000;
-  
-  /* Slate Scale - Neutrals */
-  --color-slate-50: #f8fafc;
-  --color-slate-100: #f1f5f9;
-  --color-slate-200: #e2e8f0;
-  --color-slate-300: #cbd5e1;
-  --color-slate-400: #94a3b8;
-  --color-slate-500: #64748b;
-  --color-slate-600: #475569;
-  --color-slate-700: #334155;
-  --color-slate-800: #1e293b;
-  --color-slate-900: #0f172a;
-  --color-slate-950: #020617;
-  
-  /* Semantic Colors */
-  --color-green-500: #22c55e;
-  --color-green-600: #16a34a;
-  --color-amber-500: #f59e0b;
-  --color-amber-600: #d97706;
-  --color-red-500: #ef4444;
-  --color-red-600: #dc2626;
-  --color-blue-500: #3b82f6;
-  --color-blue-600: #2563eb;
-  --color-violet-500: #8b5cf6;
-  --color-violet-600: #7c3aed;
-  
+  --color-black: #0a0f14;
+
   /* ----------------------------------------------------------------
-     THEME COLORS - Use these in components!
-     Organized by semantic purpose
+     PRIMARY PALETTE - Soft Terminal Aesthetic
      ---------------------------------------------------------------- */
-  
-  /* Backgrounds */
-  --bg-primary: var(--color-slate-900);
-  --bg-secondary: var(--color-slate-800);
-  --bg-tertiary: var(--color-slate-700);
-  --bg-surface: var(--color-slate-800);
-  --bg-surface-hover: var(--color-slate-700);
-  --bg-input: var(--color-slate-900);
-  
-  /* Text */
-  --text-primary: var(--color-slate-200);
-  --text-secondary: var(--color-slate-400);
-  --text-tertiary: var(--color-slate-500);
-  --text-muted: var(--color-slate-500);
-  --text-inverse: var(--color-white);
-  
-  /* Borders */
-  --border-primary: var(--color-slate-700);
-  --border-secondary: var(--color-slate-600);
-  --border-hover: var(--color-slate-600);
-  
-  /* Status Colors */
-  --status-success: var(--color-green-500);
-  --status-success-text: var(--color-green-500);
-  --status-warning: var(--color-amber-500);
-  --status-warning-text: var(--color-amber-500);
-  --status-error: var(--color-red-500);
-  --status-error-text: var(--color-red-500);
-  --status-info: var(--color-blue-500);
-  --status-info-text: var(--color-blue-500);
-  --status-neutral: var(--color-slate-500);
-  
-  /* Interactive - Primary Action */
-  --action-primary-bg: var(--color-blue-500);
-  --action-primary-bg-hover: var(--color-blue-600);
-  --action-primary-text: var(--color-white);
-  
-  /* Interactive - Secondary Action */
-  --action-secondary-bg: var(--color-violet-500);
-  --action-secondary-bg-hover: var(--color-violet-600);
-  --action-secondary-text: var(--color-white);
-  
-  /* Interactive - Success Action */
-  --action-success-bg: var(--color-green-500);
-  --action-success-bg-hover: var(--color-green-600);
-  --action-success-text: var(--color-white);
-  
-  /* Interactive - Danger Action */
-  --action-danger-bg: var(--color-red-500);
-  --action-danger-bg-hover: var(--color-red-600);
-  --action-danger-text: var(--color-white);
-  
-  /* Interactive - Ghost/Subtle */
+
+  /* Backgrounds - Deep navy system */
+  --bg-primary: #0a0f14;
+  --bg-secondary: #111821;
+  --bg-tertiary: #1a2530;
+  --bg-surface: #111821;
+  --bg-surface-hover: #161d27;
+  --bg-input: #0d1218;
+
+  /* Text - Warm grays on dark */
+  --text-primary: #e2e8f0;
+  --text-secondary: #94a3b8;
+  --text-tertiary: #64748b;
+  --text-muted: #64748b;
+  --text-inverse: #0a0f14;
+
+  /* Borders - Subtle, barely visible */
+  --border-primary: #1e2a35;
+  --border-secondary: #2a3a48;
+  --border-hover: #3a4a5a;
+
+  /* ----------------------------------------------------------------
+     ACCENT COLORS
+     ---------------------------------------------------------------- */
+
+  /* Primary - Green success state */
+  --color-primary: #4ade80;
+  --color-primary-hover: #22c55e;
+  --color-primary-bg: rgba(74, 222, 128, 0.15);
+  --color-primary-bg-hover: rgba(74, 222, 128, 0.2);
+
+  /* Secondary - Teal accent */
+  --color-secondary: #14b8a6;
+  --color-secondary-hover: #0d9488;
+  --color-secondary-bg: rgba(20, 184, 166, 0.15);
+
+  /* Warning/Error - Soft coral */
+  --color-error: #f87171;
+  --color-error-hover: #ef4444;
+  --color-error-bg: rgba(248, 113, 113, 0.15);
+  --color-error-bg-hover: rgba(248, 113, 113, 0.2);
+
+  /* Highlight - Cyan info */
+  --color-highlight: #22d3ee;
+  --color-highlight-bg: rgba(34, 211, 238, 0.1);
+
+  /* Terminal Prompt */
+  --color-terminal-prompt: #64748b;
+
+  /* ----------------------------------------------------------------
+     STATUS COLORS
+     ---------------------------------------------------------------- */
+  --status-success: var(--color-primary);
+  --status-success-bg: var(--color-primary-bg);
+  --status-success-text: var(--color-primary);
+  --status-error: var(--color-error);
+  --status-error-bg: var(--color-error-bg);
+  --status-error-text: var(--color-error);
+  --status-warning: #fbbf24;
+  --status-warning-bg: rgba(251, 191, 36, 0.15);
+  --status-neutral: #64748b;
+
+  /* ----------------------------------------------------------------
+     ACTION COLORS
+     ---------------------------------------------------------------- */
+
+  /* Primary Action - Green */
+  --action-primary-bg: var(--color-primary);
+  --action-primary-bg-hover: var(--color-primary-hover);
+  --action-primary-text: var(--text-inverse);
+
+  /* Secondary Action - Teal */
+  --action-secondary-bg: var(--color-secondary);
+  --action-secondary-bg-hover: var(--color-secondary-hover);
+  --action-secondary-text: var(--text-inverse);
+
+  /* Success Action */
+  --action-success-bg: var(--color-primary);
+  --action-success-bg-hover: var(--color-primary-hover);
+  --action-success-text: var(--text-inverse);
+
+  /* Danger Action - Ghost style */
+  --action-danger-bg: transparent;
+  --action-danger-bg-hover: var(--color-error-bg);
+  --action-danger-text: var(--color-error);
+  --action-danger-border: var(--color-error);
+
+  /* Ghost Action */
   --action-ghost-bg: transparent;
-  --action-ghost-bg-hover: var(--color-slate-700);
-  --action-ghost-text: var(--color-slate-400);
-  --action-ghost-text-hover: var(--color-slate-300);
-  --action-ghost-border: var(--color-slate-600);
-  
-  /* ----------------------------------------------------------------
-     SPACING - Consistent spacing scale
-     ---------------------------------------------------------------- */
-  --space-0: 0;
-  --space-1: 0.25rem;   /* 4px */
-  --space-2: 0.5rem;    /* 8px */
-  --space-3: 0.75rem;   /* 12px */
-  --space-4: 1rem;      /* 16px */
-  --space-5: 1.25rem;   /* 20px */
-  --space-6: 1.5rem;    /* 24px */
-  --space-8: 2rem;      /* 32px */
-  --space-10: 2.5rem;   /* 40px */
-  --space-12: 3rem;     /* 48px */
-  
+  --action-ghost-bg-hover: var(--bg-tertiary);
+  --action-ghost-text: var(--text-secondary);
+  --action-ghost-text-hover: var(--text-primary);
+  --action-ghost-border: var(--border-primary);
+
   /* ----------------------------------------------------------------
      TYPOGRAPHY
      ---------------------------------------------------------------- */
+
+  /* Font Families */
+  --font-display: "JetBrains Mono", "Fira Code", monospace;
+  --font-body: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-terminal: "JetBrains Mono", "SF Mono", monospace;
+
+  /* Font Sizes */
   --font-size-xs: 0.75rem;
   --font-size-sm: 0.875rem;
   --font-size-base: 1rem;
   --font-size-lg: 1.125rem;
   --font-size-xl: 1.25rem;
   --font-size-2xl: 1.5rem;
-  
+  --font-size-3xl: 1.75rem;
+
+  /* Font Weights */
   --font-weight-normal: 400;
   --font-weight-medium: 500;
   --font-weight-semibold: 600;
   --font-weight-bold: 700;
-  
+
+  /* ----------------------------------------------------------------
+     SPACING
+     ---------------------------------------------------------------- */
+  --space-0: 0;
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+
   /* ----------------------------------------------------------------
      BORDERS & RADIUS
      ---------------------------------------------------------------- */
@@ -139,19 +161,25 @@
   --radius-md: 0.375rem;
   --radius-lg: 0.5rem;
   --radius-xl: 0.75rem;
+  --radius-2xl: 1rem;
   --radius-full: 9999px;
-  
+
   /* ----------------------------------------------------------------
      SHADOWS
      ---------------------------------------------------------------- */
-  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1);
-  
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.1);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.15);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.2);
+  --shadow-card-hover: 0 4px 20px rgba(74, 222, 128, 0.05);
+  --shadow-success: 0 0 20px rgba(74, 222, 128, 0.15);
+  --shadow-error: 0 0 20px rgba(248, 113, 113, 0.15);
+
   /* ----------------------------------------------------------------
      TRANSITIONS
      ---------------------------------------------------------------- */
-  --transition-fast: 150ms ease;
-  --transition-base: 200ms ease;
-  --transition-slow: 300ms ease;
+  --transition-fast: 150ms ease-out;
+  --transition-base: 200ms ease-out;
+  --transition-slow: 300ms ease-out;
+  --transition-smooth: 250ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 

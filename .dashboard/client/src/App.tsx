@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { MoltList } from './components/MoltList';
 import { BroadcastPanel } from './components/BroadcastPanel';
+import { Stat, Button } from './components/ui';
 import { MoltStatus } from './types';
 
 function App() {
@@ -14,7 +15,7 @@ function App() {
       setLoading(true);
       const response = await fetch('/api/molts');
       const data = await response.json();
-      
+
       if (data.error) {
         setError(data.error);
       } else {
@@ -56,45 +57,36 @@ function App() {
   return (
     <div className="min-h-screen flex flex-col bg-bg-primary text-text-primary">
       <header className="bg-bg-secondary px-8 py-6 border-b border-border-primary flex items-center justify-between gap-8">
-        <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-violet-400 bg-clip-text text-transparent">
+        <h1 className="text-2xl font-bold font-display bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
           🦕 Molt Fleet Dashboard
         </h1>
         <div className="flex gap-8">
-          <div className="text-center">
-            <span className="block text-2xl font-bold text-text-secondary">{summary.total}</span>
-            <span className="block text-xs uppercase tracking-wider text-text-muted">Total</span>
-          </div>
-          <div className="text-center">
-            <span className="block text-2xl font-bold text-status-success">{summary.running}</span>
-            <span className="block text-xs uppercase tracking-wider text-text-muted">Running</span>
-          </div>
-          <div className="text-center">
-            <span className="block text-2xl font-bold text-status-error">{summary.stopped}</span>
-            <span className="block text-xs uppercase tracking-wider text-text-muted">Stopped</span>
-          </div>
+          <Stat value={summary.total} label="Total" color="neutral" />
+          <Stat value={summary.running} label="Running" color="success" />
+          <Stat value={summary.stopped} label="Stopped" color="error" />
         </div>
-        <button 
-          type="button" 
-          onClick={fetchMolts} 
-          className="px-4 py-2 bg-action-primary text-text-inverse rounded font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+        <Button
+          variant="primary"
+          onClick={fetchMolts}
           disabled={loading}
+          loading={loading}
         >
-          {loading ? 'Loading...' : 'Refresh'}
-        </button>
+          Refresh
+        </Button>
       </header>
 
       {error && (
-        <div className="bg-status-error text-text-inverse px-4 py-3 text-center">
+        <div className="bg-status-error-bg text-status-error-text px-4 py-3 text-center border-b border-status-error/30">
           {error}
         </div>
       )}
 
       <main className="flex-1 grid grid-cols-1 lg:grid-cols-[1fr_350px] gap-8 p-8 max-w-[1400px] mx-auto w-full">
         <section>
-          <h2 className="text-text-secondary mb-4">Active Molts</h2>
-          <MoltList 
-            molts={molts} 
-            onStart={handleStart} 
+          <h2 className="text-text-secondary mb-4 font-medium">Active Molts</h2>
+          <MoltList
+            molts={molts}
+            onStart={handleStart}
             onStop={handleStop}
           />
         </section>

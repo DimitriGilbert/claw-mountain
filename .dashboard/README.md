@@ -5,6 +5,7 @@ A unified control plane for managing your molt swarm.
 ## Features
 
 - **Fleet Status**: Real-time visualization of all molts with status, ports, and health
+- **Health Monitoring**: Track molt uptime, response times, and failure patterns
 - **Multi-Executor**: Broadcast messages to all running molts simultaneously
 - **Deep Links**: Direct access to individual molt dashboards
 - **Auto-Refresh**: Live updates every 5 seconds
@@ -13,10 +14,28 @@ A unified control plane for managing your molt swarm.
 
 ```
 .dashboard/
-├── server/          # Bun + Elysia backend (port 3000)
-│   └── src/index.ts # API routes + static file serving
-└── client/          # React frontend (port 3001 dev, served by server in prod)
-    └── src/         # React components + CSS
+ ├── server/          # Bun + Elysia backend (port 3000)
+ │   └── src/index.ts # API routes + static file serving
+ └── client/          # React + Vite frontend (port 3001 dev, served by server in prod)
+     ├── src/
+     │   ├── App.tsx              # Main application
+     │   ├── main.tsx             # Entry point
+     │   ├── theme.css            # Design tokens and CSS variables
+     │   ├── index.css            # Tailwind v4 mappings
+     │   ├── types/               # TypeScript type definitions
+     │   └── components/
+     │       ├── MoltList.tsx     # Molt card grid
+     │       ├── HealthPanel.tsx   # Health monitoring details
+     │       ├── BroadcastPanel.tsx # Broadcast message panel
+     │       └── ui/              # Reusable UI component library
+     │           ├── Card.tsx      # Base card with status accents
+     │           ├── Badge.tsx     # Status badges
+     │           ├── Button.tsx    # Button variants (primary, secondary, danger, ghost)
+     │           ├── Stat.tsx      # Header statistics
+     │           ├── HealthIndicator.tsx # Health status with dot
+     │           ├── EmptyState.tsx # Empty state with terminal styling
+     │           ├── TerminalText.tsx # Monospace text component
+     │           └── index.ts     # Component exports
 ```
 
 ## Quick Start
@@ -67,6 +86,21 @@ Then open http://localhost:3000
 - `GET /api/molts/:name/logs?lines=50` - Get molt logs
 - `GET /api/molts/:name/dashboard` - Get dashboard URL
 - `POST /api/broadcast` - Broadcast message to all running molts
+- `GET /api/molts/:name/health` - Get health status
+- `POST /api/molts/:name/health/setup` - Setup health monitoring
+- `GET /api/molts/:name/history` - Get uptime history
+- `GET /api/molts/:name/watch-state` - Get health watch state
+
+## Design System
+
+The dashboard uses a custom "Soft Terminal Modernism" aesthetic:
+
+- **Color Palette**: Deep navy backgrounds (`#0a0f14`), green success states (`#4ade80`), soft coral errors (`#f87171`), teal accents (`#14b8a6`)
+- **Typography**: JetBrains Mono for headers/data, Inter for body text
+- **Component Library**: 8 reusable UI components for consistency
+- **Design Tokens**: CSS custom properties defined in `theme.css`
+
+See `.docs/artistic_direction.md` for complete design guidelines.
 
 ## How It Works
 

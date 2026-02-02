@@ -79,6 +79,18 @@ The individual molt directories are gitignored. Each deployment's bot instances 
 
 ## Code Quality - READ THIS OR ELSE
 
+### STRICT PROHIBITION: NEVER RUN DEV SERVERS
+
+**DO NOT EVER START DEVELOPMENT SERVERS.**
+
+- **NEVER run `npm run dev`, `bun run dev`, `python manage.py runserver`, or ANY dev server command**
+- **DO NOT start services** - this is a MAJOR VIOLATION
+- **NO servers, NO daemons, NO background processes** of any kind
+- **Ask for permission first** - do not assume it's okay to test/preview
+- **This rule is absolute** - there are no exceptions
+
+**FAILURE TO COMPLY RESULTS IN IMMEDIATE TERMINATION**
+
 ### LSP Errors Are Blocking Errors
 
 **When you see an LSP error, YOU STOP EVERYTHING AND FIX IT.**

@@ -14,30 +14,44 @@
   --color-bg-surface: var(--bg-surface);
   --color-bg-surface-hover: var(--bg-surface-hover);
   --color-bg-input: var(--bg-input);
-  
+
   /* Text Colors */
   --color-text-primary: var(--text-primary);
   --color-text-secondary: var(--text-secondary);
   --color-text-tertiary: var(--text-tertiary);
   --color-text-muted: var(--text-muted);
   --color-text-inverse: var(--text-inverse);
-  
+
   /* Border Colors */
   --color-border-primary: var(--border-primary);
   --color-border-secondary: var(--border-secondary);
   --color-border-hover: var(--border-hover);
-  
+
   /* Status Colors */
   --color-status-success: var(--status-success);
+  --color-status-success-bg: var(--status-success-bg);
   --color-status-success-text: var(--status-success-text);
   --color-status-warning: var(--status-warning);
-  --color-status-warning-text: var(--status-warning-text);
+  --color-status-warning-bg: var(--status-warning-bg);
   --color-status-error: var(--status-error);
+  --color-status-error-bg: var(--status-error-bg);
   --color-status-error-text: var(--status-error-text);
-  --color-status-info: var(--status-info);
-  --color-status-info-text: var(--status-info-text);
   --color-status-neutral: var(--status-neutral);
-  
+
+  /* Accent Colors */
+  --color-primary: var(--color-primary);
+  --color-primary-hover: var(--color-primary-hover);
+  --color-primary-bg: var(--color-primary-bg);
+  --color-secondary: var(--color-secondary);
+  --color-secondary-hover: var(--color-secondary-hover);
+  --color-secondary-bg: var(--color-secondary-bg);
+  --color-error: var(--color-error);
+  --color-error-hover: var(--color-error-hover);
+  --color-error-bg: var(--color-error-bg);
+  --color-highlight: var(--color-highlight);
+  --color-highlight-bg: var(--color-highlight-bg);
+  --color-terminal-prompt: var(--color-terminal-prompt);
+
   /* Action Colors */
   --color-action-primary: var(--action-primary-bg);
   --color-action-primary-hover: var(--action-primary-bg-hover);
@@ -47,9 +61,14 @@
   --color-action-success-hover: var(--action-success-bg-hover);
   --color-action-danger: var(--action-danger-bg);
   --color-action-danger-hover: var(--action-danger-bg-hover);
+  --color-action-danger-text: var(--action-danger-text);
+  --color-action-danger-border: var(--action-danger-border);
   --color-action-ghost: var(--action-ghost-bg);
   --color-action-ghost-hover: var(--action-ghost-bg-hover);
-  
+  --color-action-ghost-text: var(--action-ghost-text);
+  --color-action-ghost-text-hover: var(--action-ghost-text-hover);
+  --color-action-ghost-border: var(--action-ghost-border);
+
   /* Spacing */
   --spacing-0: var(--space-0);
   --spacing-1: var(--space-1);
@@ -61,7 +80,7 @@
   --spacing-8: var(--space-8);
   --spacing-10: var(--space-10);
   --spacing-12: var(--space-12);
-  
+
   /* Font Sizes */
   --font-size-xs: var(--font-size-xs);
   --font-size-sm: var(--font-size-sm);
@@ -69,12 +88,14 @@
   --font-size-lg: var(--font-size-lg);
   --font-size-xl: var(--font-size-xl);
   --font-size-2xl: var(--font-size-2xl);
-  
+  --font-size-3xl: var(--font-size-3xl);
+
   /* Border Radius */
   --radius-sm: var(--radius-sm);
   --radius-md: var(--radius-md);
   --radius-lg: var(--radius-lg);
   --radius-xl: var(--radius-xl);
+  --radius-2xl: var(--radius-2xl);
   --radius-full: var(--radius-full);
 }
 
