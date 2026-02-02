@@ -541,10 +541,10 @@ Manually trigger the mail watcher script (for testing). Runs as molt user.
 
 ```bash
 # Manual check with verbose output
-sudo -u mybot /path/to/claw-mountain/.scripts/_molt/_mail/watch --verbose
+sudo -i -u mybot /path/to/claw-mountain/.scripts/_molt/_mail/watch --verbose
 
 # Force trigger even if no new mail (for testing webhook)
-sudo -u mybot /path/to/claw-mountain/.scripts/_molt/_mail/watch --force --verbose
+sudo -i -u mybot /path/to/claw-mountain/.scripts/_molt/_mail/watch --force --verbose
 ```
 
 ## Workflow
@@ -858,7 +858,7 @@ grep '"token"' ~/molts/<name>/.openclaw/openclaw.json
 
 Test the watcher manually:
 ```bash
-sudo -u <name> ./.scripts/_molt/_mail/watch --verbose
+sudo -i -u <name> ./.scripts/_molt/_mail/watch --verbose
 ```
 
 Verify OpenClaw hooks are enabled:

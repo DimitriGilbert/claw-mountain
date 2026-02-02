@@ -60,7 +60,7 @@ All commands are accessed through `./clmnt <subcommand> <action>`:
 **Create and start a new molt (LAN access, personal agent):**
 ```bash
 ./clmnt molt create my-bot
-sudo -u my-bot openclaw onboard
+sudo -i -u my-bot openclaw onboard
 ./clmnt molt start my-bot
 ```
 

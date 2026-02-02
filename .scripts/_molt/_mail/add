@@ -608,7 +608,7 @@ log "✓ Email account setup complete!" 1
 log "" 0
 log "Next steps:" 1
 log "  1. Edit rules: ./clmnt molt mail skill $MOLT_NAME" 0
-log "  2. Test manually: sudo -u $MOLT_NAME $_SCRIPT_DIR/watch --verbose" 0
+log "  2. Test manually: sudo -i -u $MOLT_NAME $_SCRIPT_DIR/watch --verbose" 0
 log "  3. Check status: ./clmnt molt mail cron-setup $MOLT_NAME --status" 0
 log "" 0
 log "Automated checking:" 1
