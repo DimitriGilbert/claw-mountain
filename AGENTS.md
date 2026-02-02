@@ -5,7 +5,7 @@ This is a collection of bash scripts for managing isolated OpenClaw bot instance
 ## Architecture
 
 Each molt is a Linux user with:
-- Isolated home directory in `molts/<name>/`
+- Isolated home directory in `<name>/` (relative to project root)
 - Dedicated OpenClaw configuration and state
 - Auto-assigned unique port (19001, 19021, 19041...)
 - Docker group membership for sandboxing
@@ -15,7 +15,7 @@ Each molt is a Linux user with:
 
 - **Argument parsing**: All scripts use [parseArger](https://github.com/BunnySweety/parseArger) for robust CLI handling
 - **Base directory**: Default is `/home/didi/molts` (configurable with `-d` flag)
-- **Logs**: Stored in `molts/<name>/.openclaw/gateway.log`
+- **Logs**: Stored in `<name>/.openclaw/gateway.log`
 
 ## Script Organization
 
@@ -61,7 +61,7 @@ sudo -u my-bot openclaw onboard
 
 ## Configuration
 
-Molt configs are stored in `molts/<name>/.openclaw/openclaw.json`:
+Molt configs are stored in `<name>/.openclaw/openclaw.json`:
 - Port assignment in `gateway.port`
 - Workspace path in `agents.defaults.workspace`
 - Environment variables in `.openclaw/.env`
@@ -74,4 +74,4 @@ Molt configs are stored in `molts/<name>/.openclaw/openclaw.json`:
 
 ## Privacy Note
 
-The `molts/` directory is gitignored. Each deployment's bot instances remain personal and uncommitted.
+The individual molt directories are gitignored. Each deployment's bot instances remain personal and uncommitted.
