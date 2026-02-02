@@ -13,6 +13,9 @@ fi
 # @parseArger pos name "Molt name (will be used as username)"
 # @parseArger opt port "Gateway port for this molt (default: auto-assign starting from 19001)" --short p
 # @parseArger opt base-dir "Base directory for molts" --short d --complete "directory"
+# @parseArger opt bind "Gateway bind mode (loopback=localhost only, lan=all interfaces, tailnet=tailscale)" --short b --one-of "loopback" --one-of "lan" --one-of "tailnet"
+# @parseArger opt token "Gateway auth token (auto-generated if not provided)"
+# @parseArger opt agent-type "Agent security profile (personal=full access, restricted=always sandboxed, readonly=sandboxed read-only, groups=groups sandboxed)" --short a --one-of "personal" --one-of "restricted" --one-of "readonly" --one-of "groups"
 # @parseArger opt skill "Additional skill to install (repeatable)" --repeat
 # @parseArger flag skip-user "Skip user creation (user already exists)"
 # @parseArger flag verbose "Enable verbose output" --short v
@@ -59,6 +62,11 @@ _optional_positionals=();
 _arg_name="";
 # OPTIONALS ARGUMENTS
 _arg_port=
+_arg_bind="lan"
+_arg_one_of_arg_bind=("loopback" "lan" "tailnet" )
+_arg_token=
+_arg_agent_type="personal"
+_arg_one_of_arg_agent_type=("personal" "restricted" "readonly" "groups" )
 # Detect base directory (where clmnt is located)
 _SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 # Go up two levels: .scripts/_molt/ -> .scripts/ -> project root
@@ -90,6 +98,9 @@ print_help()
 	echo -e "	name: Molt name (will be used as username)"
 	echo -e "	-p, --port <port>: Gateway port for this molt (default: auto-assign starting from 19001)"
 	echo -e "	-d, --base-dir <base-dir>: Base directory for molts [default: '<auto-detected>']"
+	echo -e "	-b, --bind <bind>: Gateway bind mode (loopback=localhost only, lan=all interfaces, tailnet=tailscale) [one of 'loopback' 'lan' 'tailnet'] [default: 'lan']"
+	echo -e "	--token <token>: Gateway auth token (auto-generated if not provided)"
+	echo -e "	-a, --agent-type <agent-type>: Agent security profile (personal=full access, restricted=always sandboxed, readonly=sandboxed read-only, groups=groups sandboxed) [one of 'personal' 'restricted' 'readonly' 'groups'] [default: 'personal']"
 	echo -e "	--skill <skill>: Additional skill to install (repeatable), repeatable"
 	echo -e "	--skip-user|--no-skip-user: Skip user creation (user already exists)"
 	echo -e "	-v|--verbose|--no-verbose: Enable verbose output"
@@ -101,7 +112,7 @@ print_help()
 	echo -e "	--install-msmtp|--no-install-msmtp: Install msmtp (simple SMTP client) for the molt user, on by default (use --no-install-msmtp to turn it off)"
 	echo -e "	--install-isync|--no-install-isync: Install isync (mbsync for IMAP) for the molt user, on by default (use --no-install-isync to turn it off)"
 	echo -e "Usage :
-	$0 <name> [--port <value>] [--base-dir <value>] [--skill <value>] [--[no-]skip-user] [--[no-]verbose] [--[no-]install-parsearger] [--[no-]install-bun] [--[no-]install-gemini] [--[no-]install-opencode] [--[no-]install-gogcli] [--[no-]install-msmtp] [--[no-]install-isync]";
+	$0 <name> [--port <value>] [--base-dir <value>] [--bind <value>] [--token <value>] [--agent-type <value>] [--skill <value>] [--[no-]skip-user] [--[no-]verbose] [--[no-]install-parsearger] [--[no-]install-bun] [--[no-]install-gemini] [--[no-]install-opencode] [--[no-]install-gogcli] [--[no-]install-msmtp] [--[no-]install-isync]";
 	fi
 
 }
@@ -177,9 +188,42 @@ parse_commandline()
 				_arg_skill+=("$2")
 				shift
 				;;
-			--skill=*)
-				_arg_skill+=("${_key##--skill=}")
-				;;
+		--skill=*)
+			_arg_skill+=("${_key##--skill=}")
+			;;
+			
+		-b|--bind)
+			test $# -lt 2 && die "Missing value for the option: '$_key'" 1
+			_arg_bind="$2"
+			shift
+			;;
+		--bind=*)
+			_arg_bind="${_key##--bind=}"
+			;;
+		-b*)
+			_arg_bind="${_key##-b}"
+			;;
+		
+		--token)
+			test $# -lt 2 && die "Missing value for the option: '$_key'" 1
+			_arg_token="$2"
+			shift
+			;;
+		--token=*)
+			_arg_token="${_key##--token=}"
+			;;
+		
+		-a|--agent-type)
+			test $# -lt 2 && die "Missing value for the option: '$_key'" 1
+			_arg_agent_type="$2"
+			shift
+			;;
+		--agent-type=*)
+			_arg_agent_type="${_key##--agent-type=}"
+			;;
+		-a*)
+			_arg_agent_type="${_key##-a}"
+			;;
 			
 			--skip-user)
 				_arg_skip_user="on"
@@ -311,6 +355,9 @@ print_debug()
 	echo -e "	name: ${_arg_name}";
 	echo -e "	port: ${_arg_port}";
 	echo -e "	base-dir: ${_arg_base_dir}";
+	echo -e "	bind: ${_arg_bind}";
+	echo -e "	token: ${_arg_token}";
+	echo -e "	agent-type: ${_arg_agent_type}";
 	echo -e "	skill: ${_arg_skill[*]}";
 	echo -e "	skip-user: ${_arg_skip_user}";
 	echo -e "	verbose: ${_arg_verbose}";
@@ -319,8 +366,8 @@ print_debug()
 	echo -e "	install-gemini: ${_arg_install_gemini}";
 	echo -e "	install-opencode: ${_arg_install_opencode}";
 	echo -e "	install-gogcli: ${_arg_install_gogcli}";
-	echo -e "\tinstall-msmtp: ${_arg_install_msmtp}";
-	echo -e "\tinstall-isync: ${_arg_install_isync}";
+	echo -e "	install-msmtp: ${_arg_install_msmtp}";
+	echo -e "	install-isync: ${_arg_install_isync}";
 
 }
 
@@ -334,6 +381,14 @@ parse_commandline "$@";
 handle_passed_args_count;
 assign_positional_args 1 "${_positionals[@]}";
 trap on_interrupt INT;
+
+# Validate one-of options
+if [[ "${_arg_one_of_arg_bind[*]}" != "" ]];then
+	[[ "${_arg_one_of_arg_bind[*]}" =~ "${_arg_bind}" ]] || die "bind must be one of: ${_arg_one_of_arg_bind[*]}" 1;
+fi
+if [[ "${_arg_one_of_arg_agent_type[*]}" != "" ]];then
+	[[ "${_arg_one_of_arg_agent_type[*]}" =~ "${_arg_agent_type}" ]] || die "agent-type must be one of: ${_arg_one_of_arg_agent_type[*]}" 1;
+fi
 
 
 
@@ -373,6 +428,7 @@ fi
 log "Creating molt: $MOLT_NAME" 1
 log "Home directory: $MOLT_HOME" 2
 log "Gateway port: $MOLT_PORT" 2
+log "Bind mode: $_arg_bind" 2
 
 # Check if molt already exists
 if [ -d "$MOLT_HOME" ]; then
@@ -434,30 +490,71 @@ else
   log "Warning: Molt user '$MOLT_NAME' does not exist - directories created but not chowned" -1
 fi
 
+# Generate or use provided token
+if [ -z "$_arg_token" ]; then
+  # Auto-generate 32-character hex token
+  MOLT_TOKEN=$(openssl rand -hex 32 2>/dev/null || head -c 32 /dev/urandom | xxd -p 2>/dev/null || date +%s%N | sha256sum | head -c 64)
+  log "Generated gateway auth token" 2
+else
+  MOLT_TOKEN="$_arg_token"
+  log "Using provided gateway auth token" 2
+fi
+
+# Configure sandbox based on agent-type
+case "$_arg_agent_type" in
+  personal)
+    SANDBOX_MODE="off"
+    WORKSPACE_ACCESS="rw"
+    ;;
+  restricted)
+    SANDBOX_MODE="all"
+    WORKSPACE_ACCESS="none"
+    ;;
+  readonly)
+    SANDBOX_MODE="all"
+    WORKSPACE_ACCESS="ro"
+    ;;
+  groups)
+    SANDBOX_MODE="non-main"
+    WORKSPACE_ACCESS="none"
+    ;;
+esac
+
+log "Agent type: $_arg_agent_type (sandbox: $SANDBOX_MODE, workspace: $WORKSPACE_ACCESS)" 1
+
 # Create initial OpenClaw config (using sudo since the directory is owned by molt user)
 sudo tee "$OPENCLAW_DIR/openclaw.json" > /dev/null <<EOF
 {
   "gateway": {
     "port": $MOLT_PORT,
-    "bind": "loopback",
+    "bind": "$_arg_bind",
     "auth": {
-      "token": ""
+      "mode": "token",
+      "token": "$MOLT_TOKEN"
     }
   },
   "agents": {
     "defaults": {
       "workspace": "$MOLT_HOME/.openclaw/workspace",
       "sandbox": {
-        "mode": "non-main",
+        "mode": "$SANDBOX_MODE",
         "scope": "agent",
-        "workspaceAccess": "none",
+        "workspaceAccess": "$WORKSPACE_ACCESS",
         "workspaceRoot": "$MOLT_HOME/.openclaw/sandboxes"
       }
     }
   },
   "channels": {
     "whatsapp": {
-      "allowFrom": []
+      "dmPolicy": "pairing",
+      "allowFrom": [],
+      "groupPolicy": "allowlist",
+      "groupAllowFrom": []
+    }
+  },
+  "discovery": {
+    "mdns": {
+      "mode": "minimal"
     }
   }
 }
@@ -468,6 +565,7 @@ sudo tee "$OPENCLAW_DIR/.env" > /dev/null <<EOF
 # OpenClaw environment for $MOLT_NAME
 OPENCLAW_CONFIG_PATH=$OPENCLAW_DIR/openclaw.json
 OPENCLAW_STATE_DIR=$OPENCLAW_DIR
+OPENCLAW_GATEWAY_TOKEN=$MOLT_TOKEN
 EOF
 
 # Ensure everything is owned by molt user
@@ -588,6 +686,14 @@ fi
 
 log "Molt '$MOLT_NAME' created successfully!" 1
 log "" 0
+log "Configuration:" 1
+log "  Bind mode: $_arg_bind" 0
+log "  Agent type: $_arg_agent_type (sandbox: $SANDBOX_MODE)" 0
+log "  Port: $MOLT_PORT" 0
+log "" 0
+log "IMPORTANT - Save this token for remote access:" 1
+log "  Gateway Token: $MOLT_TOKEN" 0
+log "" 0
 log "Next steps:" 1
 log "1. Setup OpenClaw (includes daemon installation):" 0
 log "   sudo -u $MOLT_NAME openclaw onboard --install-daemon" 0
@@ -606,4 +712,10 @@ log "1. Install dependencies: sudo apt-get install msmtp isync" 0
 log "2. Add email: ./clmnt molt mail add $MOLT_NAME <email> -p <password>" 0
 log "3. Check emails: ./clmnt molt mail check $MOLT_NAME" 0
 log "" 0
-log "Dashboard will be available at: http://127.0.0.1:$MOLT_PORT/" 1
+log "Dashboard access:" 1
+if [ "$_arg_bind" = "loopback" ]; then
+  log "  Local only: http://127.0.0.1:$MOLT_PORT/" 0
+else
+  log "  Local: http://127.0.0.1:$MOLT_PORT/" 0
+  log "  LAN: http://<host-ip>:$MOLT_PORT/" 0
+fi

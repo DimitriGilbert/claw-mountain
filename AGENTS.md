@@ -57,12 +57,33 @@ All commands are accessed through `./clmnt <subcommand> <action>`:
 
 ## Common Workflows
 
-**Create and start a new molt:**
+**Create and start a new molt (LAN access, personal agent):**
 ```bash
 ./clmnt molt create my-bot
 sudo -u my-bot openclaw onboard
 ./clmnt molt start my-bot
 ```
+
+**Create with specific options:**
+```bash
+# Loopback only (localhost access only)
+./clmnt molt create my-bot --bind loopback
+
+# Restricted agent (always sandboxed)
+./clmnt molt create public-bot --agent-type restricted
+
+# Custom auth token
+./clmnt molt create my-bot --token my-secret-token-123
+
+# Read-only agent with custom port
+./clmnt molt create readonly-bot --agent-type readonly --port 19021
+```
+
+**Agent Types:**
+- `personal` (default) - Full access, no sandboxing
+- `restricted` - Always sandboxed, no workspace access  
+- `readonly` - Sandboxed with read-only workspace access
+- `groups` - Groups sandboxed, DMs run on host
 
 **Check status and logs:**
 ```bash
