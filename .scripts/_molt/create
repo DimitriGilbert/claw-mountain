@@ -589,9 +589,17 @@ fi
 log "Molt '$MOLT_NAME' created successfully!" 1
 log "" 0
 log "Next steps:" 1
-log "1. Setup OpenClaw: sudo -u $MOLT_NAME openclaw onboard" 0
-log "2. Start molt: ./clmnt molt start $MOLT_NAME" 0
-log "3. Check status: ./clmnt molt status $MOLT_NAME" 0
+log "1. Setup OpenClaw (includes daemon installation):" 0
+log "   sudo -u $MOLT_NAME openclaw onboard --install-daemon" 0
+log "   Note: Port $MOLT_PORT is already configured in ~/.openclaw/openclaw.json" 0
+log "" 0
+log "2. Check OpenClaw status:" 0
+log "   openclaw gateway status" 0
+log "" 0
+log "3. Manage with clmnt (optional):" 0
+log "   ./clmnt molt stop $MOLT_NAME    # Stop the gateway" 0
+log "   ./clmnt molt start $MOLT_NAME   # Start in foreground (for debugging)" 0
+log "   ./clmnt molt logs $MOLT_NAME -f # View logs" 0
 log "" 0
 log "Mail Setup (optional):" 1
 log "1. Install dependencies: sudo apt-get install msmtp isync" 0

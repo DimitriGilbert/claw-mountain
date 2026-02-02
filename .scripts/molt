@@ -11,7 +11,7 @@ if [ -t 1 ]; then # Check if stdout is a terminal
 	fi
 fi
 # @parseArger-declarations
-# @parseArger pos action "Action to perform on the molt" --subcommand-run --subcommand-use-leftovers --subcommand --one-of "create" --one-of "list" --one-of "start" --one-of "stop" --one-of "status" --one-of "logs" --one-of "delete" --one-of "clone" --one-of "exec" --one-of "shell" --one-of "browser" --one-of "dashboard" --one-of "mail" --one-of "daemonize" --one-of "dropzone-setup" --one-of "health"
+# @parseArger pos action "Action to perform on the molt" --subcommand-run --subcommand-use-leftovers --subcommand --one-of "create" --one-of "list" --one-of "start" --one-of "stop" --one-of "status" --one-of "logs" --one-of "delete" --one-of "clone" --one-of "exec" --one-of "shell" --one-of "browser" --one-of "dashboard" --one-of "mail" --one-of "dropzone-setup" --one-of "health"
 # @parseArger-declarations-end
 
 # @parseArger-utils
@@ -46,7 +46,7 @@ begins_with_short_option()
 _positionals=();
 _optional_positionals=();
 _arg_action="";
-_one_of_arg_action=("create" "list" "start" "stop" "status" "logs" "delete" "clone" "exec" "shell" "browser" "dashboard" "mail" "daemonize" "dropzone-setup" "health" );
+_one_of_arg_action=("create" "list" "start" "stop" "status" "logs" "delete" "clone" "exec" "shell" "browser" "dashboard" "mail" "dropzone-setup" "health" );
 _arg_subcommand_arg="_arg_action";
 __subcommand=();
 # OPTIONALS ARGUMENTS
@@ -73,7 +73,7 @@ print_help()
 	if [[ "$_helpHasBeenPrinted" == "1" ]]; then
 		_helpHasBeenPrinted=0;
 		echo -e "Manage molt (OpenClaw bot) instances:"
-		echo -e "	action: Action to perform on the molt [one of 'create' 'list' 'start' 'stop' 'status' 'logs' 'delete' 'clone' 'exec' 'shell' 'browser' 'dashboard' 'mail' 'daemonize' 'dropzone-setup' 'health']"
+		echo -e "	action: Action to perform on the molt [one of 'create' 'list' 'start' 'stop' 'status' 'logs' 'delete' 'clone' 'exec' 'shell' 'browser' 'dashboard' 'mail' 'dropzone-setup' 'health']"
 	echo -e "Usage :
 	$0 <action>";
 	fi
