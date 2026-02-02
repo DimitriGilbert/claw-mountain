@@ -137,6 +137,30 @@ The individual molt directories are gitignored. Each deployment's bot instances 
 3. Create a utility type
 4. Ask - do not default to `any`
 
+### NO ASSUMPTIONS - ZERO TOLERANCE
+
+**WHEN YOU DON'T KNOW SOMETHING, YOU DO NOT ASSUME. YOU FIND THE INFORMATION.**
+
+- **FORBIDDEN**: Making assumptions about behavior, naming conventions, or system design
+- **FORBIDDEN**: Guessing how external tools or systems work without verification
+- **FORBIDDEN**: Hallucinating documentation or API behavior
+- **FORBIDDEN**: "I assume..." or "Probably..." or "It should..."
+
+**Required Actions When Uncertain**:
+1. **STOP** - Do not proceed with assumptions
+2. **SEARCH** - Use web search, docs, or grep to find the truth
+3. **READ** - Fetch documentation, read source code, check examples
+4. **VERIFY** - Confirm with multiple sources if needed
+5. **ASK** - If still uncertain, ask the user for clarification
+
+**Examples of Violations**:
+- Assuming systemd service names without checking docs
+- Assuming file paths or directory structures
+- Assuming how external tools (openclaw, docker, etc.) work
+- Assuming default values or behavior
+
+**Ground yourself in knowledge, not speculation.**
+
 **FAILURE TO COMPLY RESULTS IN IMMEDIATE TERMINATION**
 
 ### LSP Errors Are Blocking Errors
