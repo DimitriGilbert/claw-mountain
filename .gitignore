@@ -27,5 +27,8 @@ node_modules/
 # yarn.lock
 # pnpm-lock.yaml
 
+# molts index
+molts.json
+
 # Molts directory
-AD
+AD/
