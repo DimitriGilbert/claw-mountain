@@ -464,6 +464,12 @@ if [ "$_arg_skip_user" = "off" ]; then
     log "Warning: User $MOLT_NAME has sudo entries - removing" -1
     sudo sed -i "/^$MOLT_NAME/d" /etc/sudoers
   fi
+  
+  # Enable systemd user lingering for persistent services
+  if command -v loginctl &>/dev/null; then
+    log "Enabling systemd user lingering for $MOLT_NAME" 1
+    sudo loginctl enable-linger "$MOLT_NAME" || log "Warning: Failed to enable lingering" -1
+  fi
 fi
 
 # Create OpenClaw directory structure
@@ -482,6 +488,20 @@ MOLT_PORT=$MOLT_PORT
 MOLT_HOME=$MOLT_HOME
 CREATED=$(date -Iseconds)
 EOF
+
+# Create .bashrc with brew configuration if brew exists
+if [ -d "/home/linuxbrew/.linuxbrew" ]; then
+  log "Configuring brew for $MOLT_NAME" 1
+  sudo tee "$MOLT_HOME/.bashrc" > /dev/null <<'EOF'
+# Brew configuration
+if [ -d "/home/linuxbrew/.linuxbrew" ]; then
+  eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+fi
+
+# Default PATH
+export PATH="$HOME/.local/bin:$PATH"
+EOF
+fi
 
 # Set ownership to molt user
 if id "$MOLT_NAME" &>/dev/null; then
@@ -696,7 +716,7 @@ log "  Gateway Token: $MOLT_TOKEN" 0
 log "" 0
 log "Next steps:" 1
 log "1. Setup OpenClaw (includes daemon installation):" 0
-log "   sudo -u $MOLT_NAME openclaw onboard --install-daemon" 0
+log "   sudo -i -u $MOLT_NAME openclaw onboard --install-daemon" 0
 log "   Note: Port $MOLT_PORT is already configured in ~/.openclaw/openclaw.json" 0
 log "" 0
 log "2. Check OpenClaw status:" 0
