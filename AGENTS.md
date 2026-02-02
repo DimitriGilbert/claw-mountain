@@ -71,6 +71,7 @@ Molt configs are stored in `<name>/.openclaw/openclaw.json`:
 - **Script reference**: See README.md for full command documentation
 - **OpenClaw configuration**: See [OpenClaw docs](https://docs.openclaw.ai/)
 - **parseArger usage**: Each script has declarations at the top showing available options
+- **Dashboard development**: See `.dashboard/AGENTS.md` for TypeScript/React monorepo guidelines
 
 ## Privacy Note
 

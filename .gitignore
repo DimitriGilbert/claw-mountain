@@ -18,4 +18,15 @@ molts/
 tmp/
 temp/
 *.tmp
+
+# Dependencies
+node_modules/
+
+# Lock files (optional - uncomment if you want to ignore them)
+# bun.lock
+# bun.lockb
+# package-lock.json
+# yarn.lock
+# pnpm-lock.yaml
+
 AD
