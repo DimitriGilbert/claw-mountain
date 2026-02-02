@@ -1,6 +1,6 @@
 #!/bin/bash
 # @parseArger-begin
-# @parseArger-help "Manage molt (OpenClaw bot) instances" --option "help" --short-option "h"
+# @parseArger-help "Manage health monitoring for a molt" --option "help" --short-option "h"
 # @parseArger-verbose --option "verbose" --level "0" --quiet-option "quiet"
 # @parseArger-leftovers leftovers
 _has_colors=0
@@ -11,7 +11,8 @@ if [ -t 1 ]; then # Check if stdout is a terminal
 	fi
 fi
 # @parseArger-declarations
-# @parseArger pos action "Action to perform on the molt" --subcommand-run --subcommand-use-leftovers --subcommand --one-of "create" --one-of "list" --one-of "start" --one-of "stop" --one-of "status" --one-of "logs" --one-of "delete" --one-of "clone" --one-of "exec" --one-of "shell" --one-of "browser" --one-of "dashboard" --one-of "mail" --one-of "daemonize" --one-of "dropzone-setup" --one-of "health"
+# @parseArger pos action "Health action to perform" --subcommand-run --subcommand-use-leftovers --subcommand --one-of "check" --one-of "setup" --one-of "status" --one-of "history" --one-of "logs"
+# @parseArger flag verbose "Enable verbose output" --short v
 # @parseArger-declarations-end
 
 # @parseArger-utils
@@ -46,11 +47,12 @@ begins_with_short_option()
 _positionals=();
 _optional_positionals=();
 _arg_action="";
-_one_of_arg_action=("create" "list" "start" "stop" "status" "logs" "delete" "clone" "exec" "shell" "browser" "dashboard" "mail" "daemonize" "dropzone-setup" "health" );
+_one_of_arg_action=("check" "setup" "status" "history" "logs" );
 _arg_subcommand_arg="_arg_action";
 __subcommand=();
 # OPTIONALS ARGUMENTS
 # FLAGS
+_arg_verbose="off"
 # NESTED
 # LEFTOVERS
 _arg_leftovers=()
@@ -72,10 +74,11 @@ print_help()
 
 	if [[ "$_helpHasBeenPrinted" == "1" ]]; then
 		_helpHasBeenPrinted=0;
-		echo -e "Manage molt (OpenClaw bot) instances:"
-		echo -e "	action: Action to perform on the molt [one of 'create' 'list' 'start' 'stop' 'status' 'logs' 'delete' 'clone' 'exec' 'shell' 'browser' 'dashboard' 'mail' 'daemonize' 'dropzone-setup' 'health']"
+		echo -e "Manage health monitoring for a molt:"
+	echo -e "	action: Health action to perform [one of 'check' 'setup' 'status' 'history' 'logs']"
+	echo -e "	-v|--verbose|--no-verbose: Enable verbose output"
 	echo -e "Usage :
-	$0 <action>";
+	$0 <action> [--[no-]verbose]";
 	fi
 
 	fi
@@ -125,6 +128,12 @@ parse_commandline()
 	do
 		_key="$1"
 		case "$_key" in
+			-v|--verbose)
+				_arg_verbose="on"
+				;;
+			--no-verbose)
+				_arg_verbose="off"
+				;;
 			-h|--help)
 				print_help;
 				;;
@@ -190,16 +199,16 @@ assign_positional_args()
 			fi
 			
 			if [ "$_arg_subcommand_arg" == "$_positional_name" ];then
-				if [ -f "_molt/${1}" ] && command -v "_molt/${1}" > /dev/null 2>&1;then
-					__subcommand+=("_molt/${1}");
-				elif [ -f "$_SCRIPT_DIR/_molt/${1}" ] && command -v "$_SCRIPT_DIR/_molt/${1}" > /dev/null 2>&1;then
-					__subcommand+=("$_SCRIPT_DIR/_molt/${1}");
-				elif [[ "_molt/" == $(basename "$_SCRIPT_DIR")* ]];then
+				if [ -f "_health/${1}" ] && command -v "_health/${1}" > /dev/null 2>&1;then
+					__subcommand+=("_health/${1}");
+				elif [ -f "$_SCRIPT_DIR/_health/${1}" ] && command -v "$_SCRIPT_DIR/_health/${1}" > /dev/null 2>&1;then
+					__subcommand+=("$_SCRIPT_DIR/_health/${1}");
+				elif [[ "_health/" == $(basename "$_SCRIPT_DIR")* ]];then
 					cmdToSub="$(basename "$_SCRIPT_DIR")";
-					cmdsubDir="_molt/";
+					cmdsubDir="_health/";
 					__subcommand+=("$_SCRIPT_DIR${cmdsubDir#"${cmdToSub}"}${1}");
 				else
-					__subcommand+=("$_SCRIPT_DIR/_molt/${1}");
+					__subcommand+=("$_SCRIPT_DIR/_health/${1}");
 				fi
 			fi
 		fi
@@ -215,6 +224,7 @@ print_debug()
 	echo "DEBUG: $0 $@";
 	
 	echo -e "	action: ${_arg_action}";
+	echo -e "	verbose: ${_arg_verbose}";
 	echo -e "	leftovers: ${_arg_leftovers[*]}";
 
 }

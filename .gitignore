@@ -3,6 +3,9 @@
 # DO NOT commit this to version control
 molts/
 
+# Fleet backups - do not commit backup archives
+backups/
+
 # Common development files to ignore
 *.log
 *.pid

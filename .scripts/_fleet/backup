@@ -1,0 +1,411 @@
+#!/bin/bash
+# @parseArger-begin
+# @parseArger-help "Create a backup of all molts in the fleet" --option "help" --short-option "h"
+# @parseArger-verbose --option "verbose" --level "0" --quiet-option "quiet"
+_has_colors=0
+if [ -t 1 ]; then # Check if stdout is a terminal
+	ncolors=$(tput colors 2>/dev/null)
+	if [ -n "$ncolors" ] && [ "$ncolors" -ge 8 ]; then
+		_has_colors=1
+	fi
+fi
+# @parseArger-declarations
+# @parseArger opt compress "Compression level (gzip|bzip2|xz)" --default-value "gzip"
+# @parseArger opt output "Backup file path" --short o --default-value "./.backups/fleet-YYYY-MM-DD.tar.gz"
+# @parseArger flag exclude-maildir "Exclude Maildir to save space"
+# @parseArger flag exclude-logs "Exclude log files"
+# @parseArger flag verbose "Enable verbose output" --short v
+# @parseArger-declarations-end
+
+# @parseArger-utils
+_helpHasBeenPrinted=1;
+_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)";
+# @parseArger-utils-end
+
+# @parseArger-parsing
+
+__cli_arg_count=$#;
+
+die()
+{
+	local _ret=1
+    if [[ -n "$2" ]] && [[ "$2" =~ ^[0-9]+$ ]]; then
+   	_ret="$2"
+    fi
+	test "${_PRINT_HELP:-no}" = yes && print_help >&2
+	log "$1" -3 >&2
+	exit "${_ret}"
+}
+
+
+begins_with_short_option()
+{
+	local first_option all_short_options=''
+	first_option="${1:0:1}"
+	test "$all_short_options" = "${all_short_options/$first_option/}" && return 1 || return 0
+}
+
+# POSITIONALS ARGUMENTS
+_positionals=();
+_optional_positionals=();
+# OPTIONALS ARGUMENTS
+_arg_compress="gzip"
+_arg_output="./.backups/fleet-YYYY-MM-DD.tar.gz"
+# FLAGS
+_arg_exclude_maildir="off"
+_arg_exclude_logs="off"
+_arg_verbose="off"
+# NESTED
+_verbose_level="0";
+
+
+
+print_help()
+{
+	_triggerSCHelp=1;
+
+	if [[ "$_helpHasBeenPrinted" == "1" ]]; then
+		_helpHasBeenPrinted=0;
+		echo -e "Create a backup of all molts in the fleet:"
+	echo -e "	--compress <compress>: Compression level (gzip|bzip2|xz) [default: ' gzip ']"
+	echo -e "	-o, --output <output>: Backup file path [default: ' ./.backups/fleet-YYYY-MM-DD.tar.gz ']"
+	echo -e "	--exclude-maildir|--no-exclude-maildir: Exclude Maildir to save space"
+	echo -e "	--exclude-logs|--no-exclude-logs: Exclude log files"
+	echo -e "	-v|--verbose|--no-verbose: Enable verbose output"
+	echo -e "Usage :
+	$0 [--compress <value>] [--output <value>] [--[no-]exclude-maildir] [--[no-]exclude-logs] [--[no-]verbose]";
+	fi
+
+}
+
+log() {
+	local _arg_msg="${1}";
+	local _arg_level="${2:-0}";
+	if [ "${_arg_level}" -le "${_verbose_level}" ]; then
+		case "$_arg_level" in
+			-3)
+				_arg_COLOR="\033[0;31m";
+				;;
+			-2)
+				_arg_COLOR="\033[0;33m";
+				;;
+			-1)
+				_arg_COLOR="\033[1;33m";
+				;;
+			1)
+				_arg_COLOR="\033[0;32m";
+				;;
+			2)
+				_arg_COLOR="\033[1;36m";
+				;;
+			3)
+				_arg_COLOR="\033[0;36m";
+				;;
+			*)
+				_arg_COLOR="\033[0m";
+				;;
+		esac
+		if [ "${_has_colors}" == "1" ]; then
+			echo -e "${_arg_COLOR}${_arg_msg}\033[0m";
+		else
+			echo "${_arg_msg}";
+		fi
+	fi
+}
+
+parse_commandline()
+{
+	_positionals_count=0
+	while test $# -gt 0
+	do
+		_key="$1"
+		case "$_key" in
+			--compress)
+				test $# -lt 2 && die "Missing value for the option: '$_key'" 1
+				_arg_compress="$2"
+				shift
+				;;
+			--compress=*)
+				_arg_compress="${_key##--compress=}"
+				;;
+			
+			-o|--output)
+				test $# -lt 2 && die "Missing value for the option: '$_key'" 1
+				_arg_output="$2"
+				shift
+				;;
+			--output=*)
+				_arg_output="${_key##--output=}"
+				;;
+			-o*)
+				_arg_output="${_key##-o}"
+				;;
+			
+			--exclude-maildir)
+				_arg_exclude_maildir="on"
+				;;
+			--no-exclude-maildir)
+				_arg_exclude_maildir="off"
+				;;
+			--exclude-logs)
+				_arg_exclude_logs="on"
+				;;
+			--no-exclude-logs)
+				_arg_exclude_logs="off"
+				;;
+			-v|--verbose)
+				_arg_verbose="on"
+				;;
+			--no-verbose)
+				_arg_verbose="off"
+				;;
+			-h|--help)
+				print_help;
+				exit 0;
+				;;
+			-h*)
+				print_help;
+				exit 0;
+				;;
+			--verbose)
+				if [ $# -lt 2 ];then
+					_verbose_level="$((_verbose_level + 1))";
+				else
+					_verbose_level="$2";
+					shift;
+				fi
+				;;
+			--quiet)
+				if [ $# -lt 2 ];then
+					_verbose_level="$((_verbose_level - 1))";
+				else
+					_verbose_level="-$2";
+					shift;
+				fi
+				;;
+			
+				*)
+				_last_positional="$1"
+				_positionals+=("$_last_positional")
+				_positionals_count=$((_positionals_count + 1))
+				;;
+		esac
+		shift
+	done
+}
+
+
+handle_passed_args_count()
+{
+	local _required_args_string=""
+	if [ "${_positionals_count}" -gt 0 ] && [ "$_helpHasBeenPrinted" == "1" ];then
+		_PRINT_HELP=yes die "FATAL ERROR: There were spurious positional arguments --- we expect at most 0 (namely: $_required_args_string), but got ${_positionals_count} (the last one was: '${_last_positional}').\n\t${_positionals[*]}" 1
+	fi
+	if [ "${_positionals_count}" -lt 0 ] && [ "$_helpHasBeenPrinted" == "1" ];then
+		_PRINT_HELP=yes die "FATAL ERROR: Not enough positional arguments - we require at least 0 (namely: $_required_args_string), but got only ${_positionals_count}.
+	${_positionals[*]}" 1;
+	fi
+}
+
+
+assign_positional_args()
+{
+	local _positional_name _shift_for=$1;
+	_positional_names="";
+	shift "$_shift_for"
+	for _positional_name in ${_positional_names};do
+		test $# -gt 0 || break;
+		eval "if [ \"\$_one_of${_positional_name}\" != \"\" ];then [[ \"\${_one_of${_positional_name}[*]}\" =~ \"\${1}\" ]];fi" || die "${_positional_name} must be one of: $(eval "echo \"\${_one_of${_positional_name}[*]}\"")" 1;
+		local _match_var="_match${_positional_name}";
+		local _regex="${!_match_var}";
+		if [ -n "$_regex" ]; then
+			[[ "${1}" =~ $_regex ]] || die "${_positional_name} does not match pattern: $_regex"
+		fi
+		eval "$_positional_name=\${1}" || die "Error during argument parsing, possibly an ParseArger bug." 1;
+		shift;
+	done
+}
+
+print_debug()
+{
+	print_help
+	# shellcheck disable=SC2145
+	echo "DEBUG: $0 $@";
+	
+	echo -e "	compress: ${_arg_compress}";
+	echo -e "	output: ${_arg_output}";
+	echo -e "	exclude-maildir: ${_arg_exclude_maildir}";
+	echo -e "	exclude-logs: ${_arg_exclude_logs}";
+	echo -e "	verbose: ${_arg_verbose}";
+
+}
+
+
+on_interrupt() {
+	die Process aborted! 130;
+}
+
+
+parse_commandline "$@";
+handle_passed_args_count;
+assign_positional_args 1 "${_positionals[@]}";
+trap on_interrupt INT;
+
+
+
+
+# @parseArger-parsing-end
+# print_debug "$@"
+# @parseArger-end
+
+# Auto-detect project root
+PROJECT_ROOT="$(cd "$_SCRIPT_DIR/../../.." && pwd)"
+BASE_DIR="$PROJECT_ROOT"
+
+# Parse output path and expand date
+OUTPUT_PATH="$_arg_output"
+TODAY=$(date +%Y-%m-%d)
+OUTPUT_PATH=$(echo "$OUTPUT_PATH" | sed "s/YYYY-MM-DD/$TODAY/")
+
+# Create backup directory if needed
+BACKUP_DIR=$(dirname "$OUTPUT_PATH")
+if [ ! -d "$BACKUP_DIR" ]; then
+  log "Creating backup directory: $BACKUP_DIR" 1
+  mkdir -p "$BACKUP_DIR" || die "Failed to create backup directory $BACKUP_DIR" 1
+fi
+
+# Create temp directory for staging
+TEMP_DIR=$(mktemp -d)
+trap "rm -rf $TEMP_DIR" EXIT
+
+log "Starting fleet backup..." 1
+log "Backup directory: $BACKUP_DIR" 2
+log "Output file: $OUTPUT_PATH" 2
+
+# Build manifest
+MANIFEST='{
+  "version": "1.0",
+  "timestamp": "'$(date -Iseconds)'",
+  "hostname": "'$(hostname)'",
+  "molts": ['
+
+FIRST_MOLT=true
+TOTAL_SIZE=0
+
+# Find all molts
+for molt_dir in "$BASE_DIR"/*/; do
+  [ -d "$molt_dir" ] || continue
+  
+  # Check if it's a molt (has .molt-info file)
+  if [ -f "$molt_dir/.molt-info" ]; then
+    MOLT_NAME=$(basename "$molt_dir")
+    log "Backing up molt: $MOLT_NAME" 1
+    
+    # Create molt backup directory
+    MOLT_BACKUP_DIR="$TEMP_DIR/$MOLT_NAME"
+    mkdir -p "$MOLT_BACKUP_DIR"
+    
+    # Copy essential files
+    cp "$molt_dir/.molt-info" "$MOLT_BACKUP_DIR/" 2>/dev/null || true
+    
+    # Copy openclaw config
+    if [ -d "$molt_dir/.openclaw" ]; then
+      mkdir -p "$MOLT_BACKUP_DIR/.openclaw"
+      cp -r "$molt_dir/.openclaw/openclaw.json" "$MOLT_BACKUP_DIR/.openclaw/" 2>/dev/null || true
+      cp -r "$molt_dir/.openclaw/.env" "$MOLT_BACKUP_DIR/.openclaw/" 2>/dev/null || true
+      
+      # Copy skills if present
+      if [ -d "$molt_dir/.openclaw/skills" ]; then
+        cp -r "$molt_dir/.openclaw/skills" "$MOLT_BACKUP_DIR/.openclaw/" 2>/dev/null || true
+      fi
+    fi
+    
+    # Copy mail configs
+    [ -f "$molt_dir/.msmtprc" ] && cp "$molt_dir/.msmtprc" "$MOLT_BACKUP_DIR/" 2>/dev/null || true
+    [ -f "$molt_dir/.mbsyncrc" ] && cp "$molt_dir/.mbsyncrc" "$MOLT_BACKUP_DIR/" 2>/dev/null || true
+    
+    # Copy state directories
+    if [ -d "$molt_dir/.molt-state" ]; then
+      cp -r "$molt_dir/.molt-state" "$MOLT_BACKUP_DIR/" 2>/dev/null || true
+    fi
+    
+    if [ -d "$molt_dir/.mail-state" ]; then
+      cp -r "$molt_dir/.mail-state" "$MOLT_BACKUP_DIR/" 2>/dev/null || true
+    fi
+    
+    # Copy Maildir if not excluded
+    if [ "$_arg_exclude_maildir" = "off" ] && [ -d "$molt_dir/Maildir" ]; then
+      log "  Including Maildir..." 2
+      cp -r "$molt_dir/Maildir" "$MOLT_BACKUP_DIR/" 2>/dev/null || true
+    fi
+    
+    # Remove logs if excluded
+    if [ "$_arg_exclude_logs" = "on" ]; then
+      find "$MOLT_BACKUP_DIR" -name "*.log" -delete 2>/dev/null || true
+      find "$MOLT_BACKUP_DIR" -name "*.log.*" -delete 2>/dev/null || true
+    fi
+    
+    # Calculate molt size
+    MOLT_SIZE=$(du -sb "$MOLT_BACKUP_DIR" 2>/dev/null | cut -f1)
+    TOTAL_SIZE=$((TOTAL_SIZE + MOLT_SIZE))
+    
+    # Get molt info
+    MOLT_PORT=""
+    CREATED=""
+    if [ -f "$molt_dir/.molt-info" ]; then
+      source "$molt_dir/.molt-info" 2>/dev/null || true
+    fi
+    
+    # Add to manifest
+    if [ "$FIRST_MOLT" = true ]; then
+      FIRST_MOLT=false
+    else
+      MANIFEST="$MANIFEST,"
+    fi
+    
+    MANIFEST="$MANIFEST
+    {
+      \"name\": \"$MOLT_NAME\",
+      \"port\": ${MOLT_PORT:-null},
+      \"created\": \"${CREATED:-null}\",
+      \"backup_size_bytes\": $MOLT_SIZE
+    }"
+    
+    log "  Backed up $MOLT_NAME (${MOLT_SIZE} bytes)" 2
+  fi
+done
+
+# Close manifest
+MANIFEST="$MANIFEST
+  ],
+  \"total_size_bytes\": $TOTAL_SIZE
+}"
+
+# Write manifest
+echo "$MANIFEST" > "$TEMP_DIR/manifest.json"
+
+log "Creating archive..." 1
+
+# Create archive based on compression type
+COMPRESS="$_arg_compress"
+case "$COMPRESS" in
+  gzip|gz)
+    tar -czf "$OUTPUT_PATH" -C "$TEMP_DIR" . 2>/dev/null || die "Failed to create backup archive" 1
+    ;;
+  bzip2|bz2)
+    tar -cjf "$OUTPUT_PATH" -C "$TEMP_DIR" . 2>/dev/null || die "Failed to create backup archive" 1
+    ;;
+  xz)
+    tar -cJf "$OUTPUT_PATH" -C "$TEMP_DIR" . 2>/dev/null || die "Failed to create backup archive" 1
+    ;;
+  *)
+    tar -czf "$OUTPUT_PATH" -C "$TEMP_DIR" . 2>/dev/null || die "Failed to create backup archive" 1
+    ;;
+esac
+
+# Get final file size
+ARCHIVE_SIZE=$(stat -f%z "$OUTPUT_PATH" 2>/dev/null || stat -c%s "$OUTPUT_PATH" 2>/dev/null || echo "unknown")
+
+log "Backup complete!" 1
+log "Archive: $OUTPUT_PATH" 0
+log "Size: $ARCHIVE_SIZE bytes" 0

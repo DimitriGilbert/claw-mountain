@@ -1,0 +1,438 @@
+#!/bin/bash
+# @parseArger-begin
+# @parseArger-help "Core health monitoring script (runs via cron)" --option "help" --short-option "h"
+# @parseArger-verbose --option "verbose" --level "0" --quiet-option "quiet"
+_has_colors=0
+if [ -t 1 ]; then # Check if stdout is a terminal
+	ncolors=$(tput colors 2>/dev/null)
+	if [ -n "$ncolors" ] && [ "$ncolors" -ge 8 ]; then
+		_has_colors=1
+	fi
+fi
+# @parseArger-declarations
+# @parseArger pos name "Molt name to monitor"
+# @parseArger opt alert-email "Email for alerts"
+# @parseArger opt consecutive-failures "Failures before alerting" --default-value "2"
+# @parseArger flag verbose "Enable verbose output" --short v
+# @parseArger-declarations-end
+
+# @parseArger-utils
+_helpHasBeenPrinted=1;
+_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)";
+# @parseArger-utils-end
+
+# @parseArger-parsing
+
+__cli_arg_count=$#;
+
+die()
+{
+	local _ret=1
+    if [[ -n "$2" ]] && [[ "$2" =~ ^[0-9]+$ ]]; then
+   	_ret="$2"
+    fi
+	test "${_PRINT_HELP:-no}" = yes && print_help >&2
+	log "$1" -3 >&2
+	exit "${_ret}"
+}
+
+
+begins_with_short_option()
+{
+	local first_option all_short_options=''
+	first_option="${1:0:1}"
+	test "$all_short_options" = "${all_short_options/$first_option/}" && return 1 || return 0
+}
+
+# POSITIONALS ARGUMENTS
+_positionals=();
+_optional_positionals=();
+_arg_name="";
+# OPTIONALS ARGUMENTS
+_arg_alert_email=
+_arg_consecutive_failures="2"
+# FLAGS
+_arg_verbose="off"
+# NESTED
+_verbose_level="0";
+
+
+
+print_help()
+{
+	_triggerSCHelp=1;
+
+	if [[ "$_helpHasBeenPrinted" == "1" ]]; then
+		_helpHasBeenPrinted=0;
+		echo -e "Core health monitoring script (runs via cron):"
+	echo -e "	name: Molt name to monitor"
+	echo -e "	--alert-email <alert-email>: Email for alerts"
+	echo -e "	--consecutive-failures <consecutive-failures>: Failures before alerting [default: ' 2 ']"
+	echo -e "	-v|--verbose|--no-verbose: Enable verbose output"
+	echo -e "Usage :
+	$0 <name> [--alert-email <value>] [--consecutive-failures <value>] [--[no-]verbose]";
+	fi
+
+}
+
+log() {
+	local _arg_msg="${1}";
+	local _arg_level="${2:-0}";
+	if [ "${_arg_level}" -le "${_verbose_level}" ]; then
+		case "$_arg_level" in
+			-3)
+				_arg_COLOR="[0;31m";
+				;;
+			-2)
+				_arg_COLOR="[0;33m";
+				;;
+			-1)
+				_arg_COLOR="[1;33m";
+				;;
+			1)
+				_arg_COLOR="[0;32m";
+				;;
+			2)
+				_arg_COLOR="[1;36m";
+				;;
+			3)
+				_arg_COLOR="[0;36m";
+				;;
+			*)
+				_arg_COLOR="[0m";
+				;;
+		esac
+		if [ "${_has_colors}" == "1" ]; then
+			echo -e "${_arg_COLOR}${_arg_msg}[0m";
+		else
+			echo "${_arg_msg}";
+		fi
+	fi
+}
+
+parse_commandline()
+{
+	_positionals_count=0
+	while test $# -gt 0
+	do
+		_key="$1"
+		case "$_key" in
+			--alert-email)
+				test $# -lt 2 && die "Missing value for the option: '$_key'" 1
+				_arg_alert_email="$2"
+				shift
+				;;
+			--alert-email=*)
+				_arg_alert_email="${_key##--alert-email=}"
+				;;
+			
+			--consecutive-failures)
+				test $# -lt 2 && die "Missing value for the option: '$_key'" 1
+				_arg_consecutive_failures="$2"
+				shift
+				;;
+			--consecutive-failures=*)
+				_arg_consecutive_failures="${_key##--consecutive-failures=}"
+				;;
+			
+			-v|--verbose)
+				_arg_verbose="on"
+				;;
+			--no-verbose)
+				_arg_verbose="off"
+				;;
+			-h|--help)
+				print_help;
+				exit 0;
+				;;
+			-h*)
+				print_help;
+				exit 0;
+				;;
+			--verbose)
+				if [ $# -lt 2 ];then
+					_verbose_level="$((_verbose_level + 1))";
+				else
+					_verbose_level="$2";
+					shift;
+				fi
+				;;
+			--quiet)
+				if [ $# -lt 2 ];then
+					_verbose_level="$((_verbose_level - 1))";
+				else
+					_verbose_level="-$2";
+					shift;
+				fi
+				;;
+			
+				*)
+				_last_positional="$1"
+				_positionals+=("$_last_positional")
+				_positionals_count=$((_positionals_count + 1))
+				;;
+		esac
+		shift
+	done
+}
+
+
+handle_passed_args_count()
+{
+	local _required_args_string="name"
+	if [ "${_positionals_count}" -gt 1 ] && [ "$_helpHasBeenPrinted" == "1" ];then
+		_PRINT_HELP=yes die "FATAL ERROR: There were spurious positional arguments --- we expect at most 1 (namely: $_required_args_string), but got ${_positionals_count} (the last one was: '${_last_positional}').
+	${_positionals[*]}" 1
+	fi
+	if [ "${_positionals_count}" -lt 1 ] && [ "$_helpHasBeenPrinted" == "1" ];then
+		_PRINT_HELP=yes die "FATAL ERROR: Not enough positional arguments - we require at least 1 (namely: $_required_args_string), but got only ${_positionals_count}.
+	${_positionals[*]}" 1;
+	fi
+}
+
+
+assign_positional_args()
+{
+	local _positional_name _shift_for=$1;
+	_positional_names="_arg_name ";
+	shift "$_shift_for"
+	for _positional_name in ${_positional_names};do
+		test $# -gt 0 || break;
+		eval "if [ \"\$_one_of${_positional_name}\" != \"\" ];then [[ \"\${_one_of${_positional_name}[*]}\" =~ \"\${1}\" ]];fi" || die "${_positional_name} must be one of: $(eval "echo \"\${_one_of${_positional_name}[*]}\"")" 1;
+		local _match_var="_match${_positional_name}";
+		local _regex="${!_match_var}";
+		if [ -n "$_regex" ]; then
+			[[ "${1}" =~ $_regex ]] || die "${_positional_name} does not match pattern: $_regex"
+		fi
+		eval "$_positional_name=\${1}" || die "Error during argument parsing, possibly an ParseArger bug." 1;
+		shift;
+	done
+}
+
+print_debug()
+{
+	print_help
+	# shellcheck disable=SC2145
+	echo "DEBUG: $0 $@";
+	
+	echo -e "	name: ${_arg_name}";
+	echo -e "	alert-email: ${_arg_alert_email}";
+	echo -e "	consecutive-failures: ${_arg_consecutive_failures}";
+	echo -e "	verbose: ${_arg_verbose}";
+
+}
+
+
+on_interrupt() {
+	die Process aborted! 130;
+}
+
+
+parse_commandline "$@";
+handle_passed_args_count;
+assign_positional_args 1 "${_positionals[@]}";
+trap on_interrupt INT;
+
+
+
+
+# @parseArger-parsing-end
+# print_debug "$@"
+# @parseArger-end
+
+# Auto-detect project root
+PROJECT_ROOT="$(cd "$_SCRIPT_DIR/../../.." && pwd)"
+BASE_DIR="$PROJECT_ROOT"
+MOLT_NAME="$_arg_name"
+MOLT_HOME="$BASE_DIR/$MOLT_NAME"
+ALERT_EMAIL="$_arg_alert_email"
+CONSECUTIVE_FAILURES="$_arg_consecutive_failures"
+TIMESTAMP=$(date -Iseconds)
+
+# Validate molt exists
+if [ ! -d "$MOLT_HOME" ]; then
+  die "Molt '$MOLT_NAME' not found at $MOLT_HOME" 1
+fi
+
+# Get molt port
+MOLT_PORT=""
+if [ -f "$MOLT_HOME/.molt-info" ]; then
+  source "$MOLT_HOME/.molt-info" 2>/dev/null || true
+fi
+
+# Get port from config if not in .molt-info
+OPENCLAW_DIR="$MOLT_HOME/.openclaw"
+CONFIG_FILE="$OPENCLAW_DIR/openclaw.json"
+if [ -z "$MOLT_PORT" ] && [ -f "$CONFIG_FILE" ]; then
+  MOLT_PORT=$(grep -o '"port":[[:space:]]*[0-9]*' "$CONFIG_FILE" 2>/dev/null | grep -o '[0-9]*$' || echo "")
+fi
+
+log "[$TIMESTAMP] Checking health for $MOLT_NAME (port: ${MOLT_PORT:-unknown})" 2
+
+# Perform health check
+STATUS="unknown"
+PID=""
+RESPONSE_TIME=""
+HTTP_STATUS=""
+
+PID_FILE="$OPENCLAW_DIR/gateway.pid"
+if [ -f "$PID_FILE" ]; then
+  PID=$(cat "$PID_FILE")
+  if ps -p "$PID" > /dev/null 2>&1; then
+    if [ -n "$MOLT_PORT" ]; then
+      START_TIME=$(date +%s%N)
+      HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:$MOLT_PORT/health" 2>/dev/null || echo "000")
+      END_TIME=$(date +%s%N)
+      RESPONSE_TIME=$(( (END_TIME - START_TIME) / 1000000 ))
+      
+      if [ "$HTTP_STATUS" = "200" ]; then
+        STATUS="healthy"
+        log "Health check passed (HTTP $HTTP_STATUS, ${RESPONSE_TIME}ms)" 1
+      else
+        STATUS="unhealthy"
+        log "Health check failed (HTTP $HTTP_STATUS)" -1
+      fi
+    else
+      STATUS="unknown"
+      log "Cannot check health: port unknown" -2
+    fi
+  else
+    STATUS="dead"
+    log "Process is dead (stale PID file)" -2
+  fi
+else
+  ORPHAN_PID=$(pgrep -u "$MOLT_NAME" -f "openclaw.*gateway" 2>/dev/null | head -1 || echo "")
+  if [ -n "$ORPHAN_PID" ]; then
+    PID="$ORPHAN_PID"
+    if [ -n "$MOLT_PORT" ]; then
+      HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:$MOLT_PORT/health" 2>/dev/null || echo "000")
+      if [ "$HTTP_STATUS" = "200" ]; then
+        STATUS="healthy"
+        log "Health check passed (orphan process, HTTP $HTTP_STATUS)" 1
+      else
+        STATUS="unhealthy"
+        log "Health check failed (orphan process, HTTP $HTTP_STATUS)" -1
+      fi
+    else
+      STATUS="unknown"
+    fi
+  else
+    STATUS="stopped"
+    log "Process is stopped" -1
+  fi
+fi
+
+# Create state directory
+STATE_DIR="$MOLT_HOME/.molt-state"
+if [ ! -d "$STATE_DIR" ]; then
+  mkdir -p "$STATE_DIR" 2>/dev/null || sudo mkdir -p "$STATE_DIR" 2>/dev/null || true
+  sudo chown "$MOLT_NAME:$MOLT_NAME" "$STATE_DIR" 2>/dev/null || true
+fi
+
+# Load previous state
+FAILURE_COUNT=0
+LAST_SUCCESS="null"
+ALERT_SENT=0
+STATE_FILE="$STATE_DIR/health-watch-state.json"
+if [ -f "$STATE_FILE" ]; then
+  STATE_DATA=$(cat "$STATE_FILE" 2>/dev/null || echo "{}")
+  FAILURE_COUNT=$(echo "$STATE_DATA" | grep -o '"consecutive_failures":[0-9]*' | cut -d: -f2 || echo "0")
+  LAST_SUCCESS=$(echo "$STATE_DATA" | grep -o '"last_success":"[^"]*"' | cut -d'"' -f4 || echo "null")
+  ALERT_SENT=$(echo "$STATE_DATA" | grep -o '"alert_sent":[0-9]*' | cut -d: -f2 || echo "0")
+fi
+
+# Update failure count
+if [ "$STATUS" = "healthy" ]; then
+  FAILURE_COUNT=0
+  LAST_SUCCESS="$TIMESTAMP"
+  ALERT_SENT=0
+  log "Health check passed - resetting failure count" 2
+else
+  FAILURE_COUNT=$((FAILURE_COUNT + 1))
+  log "Health check failed - failure count: $FAILURE_COUNT" -1
+fi
+
+# Save watch state
+WATCH_STATE='{
+  "timestamp": "'$TIMESTAMP'",
+  "status": "'$STATUS'",
+  "consecutive_failures": '$FAILURE_COUNT',
+  "last_success": "'$LAST_SUCCESS'",
+  "alert_sent": '$ALERT_SENT',
+  "threshold": '$CONSECUTIVE_FAILURES'
+}'
+
+if ! echo "$WATCH_STATE" > "$STATE_FILE" 2>/dev/null; then
+  sudo -u "$MOLT_NAME" bash -c "echo '$WATCH_STATE' > '$STATE_FILE'" 2>/dev/null || true
+fi
+
+# Send alert if threshold reached
+if [ "$FAILURE_COUNT" -ge "$CONSECUTIVE_FAILURES" ] && [ "$ALERT_SENT" -eq 0 ]; then
+  log "ALERT: Health check failed $FAILURE_COUNT consecutive times!" -3
+  
+  # Try to send email alert
+  if [ -n "$ALERT_EMAIL" ] && command -v msmtp >/dev/null 2>&1; then
+    ALERT_SUBJECT="[Claw Mountain] Molt $MOLT_NAME is $STATUS"
+    ALERT_BODY="Health Alert for Molt: $MOLT_NAME
+
+Status: $STATUS
+Timestamp: $TIMESTAMP
+Consecutive Failures: $FAILURE_COUNT
+PID: ${PID:-unknown}
+Port: ${MOLT_PORT:-unknown}
+HTTP Status: ${HTTP_STATUS:-N/A}
+
+Last successful check: $LAST_SUCCESS
+
+Please investigate."
+    
+    # Send via msmtp
+    if echo "$ALERT_BODY" | msmtp -t --read-envelope-from <<< "To: $ALERT_EMAIL
+Subject: $ALERT_SUBJECT
+
+$ALERT_BODY" 2>/dev/null; then
+      log "Alert email sent to $ALERT_EMAIL" 1
+    else
+      log "Failed to send alert email" -2
+    fi
+  fi
+  
+  # Mark alert as sent
+  ALERT_SENT=1
+  WATCH_STATE=$(echo "$WATCH_STATE" | sed 's/"alert_sent": 0/"alert_sent": 1/')
+  if ! echo "$WATCH_STATE" > "$STATE_FILE" 2>/dev/null; then
+    sudo -u "$MOLT_NAME" bash -c "echo '$WATCH_STATE' > '$STATE_FILE'" 2>/dev/null || true
+  fi
+fi
+
+# Also update the regular health-status.json
+HEALTH_STATUS='{
+  "timestamp": "'$TIMESTAMP'",
+  "status": "'$STATUS'",
+  "pid": "'${PID:-null}'",
+  "port": "'${MOLT_PORT:-null}'",
+  "http_status": "'${HTTP_STATUS:-null}'",
+  "response_time_ms": "'${RESPONSE_TIME:-null}'"
+}'
+
+HEALTH_STATUS_FILE="$STATE_DIR/health-status.json"
+if ! echo "$HEALTH_STATUS" > "$HEALTH_STATUS_FILE" 2>/dev/null; then
+  sudo -u "$MOLT_NAME" bash -c "echo '$HEALTH_STATUS' > '$HEALTH_STATUS_FILE'" 2>/dev/null || true
+fi
+
+# Append to history
+HISTORY_FILE="$STATE_DIR/health-history.jsonl"
+HISTORY_ENTRY='{"timestamp":"'$TIMESTAMP'","status":"'$STATUS'","http_status":"'${HTTP_STATUS:-null}'","response_time_ms":'${RESPONSE_TIME:-null}',"pid":"'${PID:-null}'"}'
+
+if ! echo "$HISTORY_ENTRY" >> "$HISTORY_FILE" 2>/dev/null; then
+  sudo -u "$MOLT_NAME" bash -c "echo '$HISTORY_ENTRY' >> '$HISTORY_FILE'" 2>/dev/null || true
+fi
+
+log "Health check complete. Status: $STATUS" 2
+
+# Exit with appropriate code
+if [ "$STATUS" = "healthy" ]; then
+  exit 0
+else
+  exit 1
+fi

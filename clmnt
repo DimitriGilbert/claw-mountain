@@ -11,7 +11,7 @@ if [ -t 1 ]; then # Check if stdout is a terminal
 	fi
 fi
 # @parseArger-declarations
-# @parseArger pos command "Command to run" --subcommand-directory ".scripts" --subcommand-run --subcommand-use-leftovers --subcommand --one-of "molt"
+# @parseArger pos command "Command to run" --subcommand-directory ".scripts" --subcommand-run --subcommand-use-leftovers --subcommand --one-of "molt" --one-of "fleet"
 # @parseArger-declarations-end
 
 # @parseArger-utils
@@ -46,7 +46,7 @@ begins_with_short_option()
 _positionals=();
 _optional_positionals=();
 _arg_command="";
-_one_of_arg_command=("molt" );
+_one_of_arg_command=("molt" "fleet" );
 _arg_subcommand_arg="_arg_command";
 __subcommand=();
 # OPTIONALS ARGUMENTS
@@ -73,7 +73,7 @@ print_help()
 	if [[ "$_helpHasBeenPrinted" == "1" ]]; then
 		_helpHasBeenPrinted=0;
 		echo -e "Clmnt - CLI for managing OpenClaw bot instances (molts):"
-	echo -e "	command: Command to run [one of 'molt']"
+	echo -e "	command: Command to run [one of 'molt' 'fleet']"
 	echo -e "Usage :
 	$0 <command>";
 	fi

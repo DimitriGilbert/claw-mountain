@@ -1,0 +1,459 @@
+#!/bin/bash
+# @parseArger-begin
+# @parseArger-help "Setup health monitoring for a molt" --option "help" --short-option "h"
+# @parseArger-verbose --option "verbose" --level "0" --quiet-option "quiet"
+_has_colors=0
+if [ -t 1 ]; then # Check if stdout is a terminal
+	ncolors=$(tput colors 2>/dev/null)
+	if [ -n "$ncolors" ] && [ "$ncolors" -ge 8 ]; then
+		_has_colors=1
+	fi
+fi
+# @parseArger-declarations
+# @parseArger pos name "Molt name to configure"
+# @parseArger opt interval "Check interval in minutes" --short i --default-value "5"
+# @parseArger opt offset "Minute offset for staggered checks" --short o
+# @parseArger opt alert-email "Email for alerts"
+# @parseArger opt consecutive-failures "Failures before alerting" --default-value "2"
+# @parseArger flag remove "Remove monitoring"
+# @parseArger flag status "Show current status"
+# @parseArger flag verbose "Enable verbose output" --short v
+# @parseArger-declarations-end
+
+# @parseArger-utils
+_helpHasBeenPrinted=1;
+_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)";
+# @parseArger-utils-end
+
+# @parseArger-parsing
+
+__cli_arg_count=$#;
+
+die()
+{
+	local _ret=1
+    if [[ -n "$2" ]] && [[ "$2" =~ ^[0-9]+$ ]]; then
+   	_ret="$2"
+    fi
+	test "${_PRINT_HELP:-no}" = yes && print_help >&2
+	log "$1" -3 >&2
+	exit "${_ret}"
+}
+
+
+begins_with_short_option()
+{
+	local first_option all_short_options=''
+	first_option="${1:0:1}"
+	test "$all_short_options" = "${all_short_options/$first_option/}" && return 1 || return 0
+}
+
+# POSITIONALS ARGUMENTS
+_positionals=();
+_optional_positionals=();
+_arg_name="";
+# OPTIONALS ARGUMENTS
+_arg_interval="5"
+_arg_offset=
+_arg_alert_email=
+_arg_consecutive_failures="2"
+# FLAGS
+_arg_remove="off"
+_arg_status="off"
+_arg_verbose="off"
+# NESTED
+_verbose_level="0";
+
+
+
+print_help()
+{
+	_triggerSCHelp=1;
+
+	if [[ "$_helpHasBeenPrinted" == "1" ]]; then
+		_helpHasBeenPrinted=0;
+		echo -e "Setup health monitoring for a molt:"
+	echo -e "	name: Molt name to configure"
+	echo -e "	-i, --interval <interval>: Check interval in minutes [default: ' 5 ']"
+	echo -e "	-o, --offset <offset>: Minute offset for staggered checks"
+	echo -e "	--alert-email <alert-email>: Email for alerts"
+	echo -e "	--consecutive-failures <consecutive-failures>: Failures before alerting [default: ' 2 ']"
+	echo -e "	--remove|--no-remove: Remove monitoring"
+	echo -e "	--status|--no-status: Show current status"
+	echo -e "	-v|--verbose|--no-verbose: Enable verbose output"
+	echo -e "Usage :
+	$0 <name> [--interval <value>] [--offset <value>] [--alert-email <value>] [--consecutive-failures <value>] [--[no-]remove] [--[no-]status] [--[no-]verbose]";
+	fi
+
+}
+
+log() {
+	local _arg_msg="${1}";
+	local _arg_level="${2:-0}";
+	if [ "${_arg_level}" -le "${_verbose_level}" ]; then
+		case "$_arg_level" in
+			-3)
+				_arg_COLOR="[0;31m";
+				;;
+			-2)
+				_arg_COLOR="[0;33m";
+				;;
+			-1)
+				_arg_COLOR="[1;33m";
+				;;
+			1)
+				_arg_COLOR="[0;32m";
+				;;
+			2)
+				_arg_COLOR="[1;36m";
+				;;
+			3)
+				_arg_COLOR="[0;36m";
+				;;
+			*)
+				_arg_COLOR="[0m";
+				;;
+		esac
+		if [ "${_has_colors}" == "1" ]; then
+			echo -e "${_arg_COLOR}${_arg_msg}[0m";
+		else
+			echo "${_arg_msg}";
+		fi
+	fi
+}
+
+parse_commandline()
+{
+	_positionals_count=0
+	while test $# -gt 0
+	do
+		_key="$1"
+		case "$_key" in
+			-i|--interval)
+				test $# -lt 2 && die "Missing value for the option: '$_key'" 1
+				_arg_interval="$2"
+				shift
+				;;
+			--interval=*)
+				_arg_interval="${_key##--interval=}"
+				;;
+			-i*)
+				_arg_interval="${_key##-i}"
+				;;
+			
+			-o|--offset)
+				test $# -lt 2 && die "Missing value for the option: '$_key'" 1
+				_arg_offset="$2"
+				shift
+				;;
+			--offset=*)
+				_arg_offset="${_key##--offset=}"
+				;;
+			-o*)
+				_arg_offset="${_key##-o}"
+				;;
+			
+			--alert-email)
+				test $# -lt 2 && die "Missing value for the option: '$_key'" 1
+				_arg_alert_email="$2"
+				shift
+				;;
+			--alert-email=*)
+				_arg_alert_email="${_key##--alert-email=}"
+				;;
+			
+			--consecutive-failures)
+				test $# -lt 2 && die "Missing value for the option: '$_key'" 1
+				_arg_consecutive_failures="$2"
+				shift
+				;;
+			--consecutive-failures=*)
+				_arg_consecutive_failures="${_key##--consecutive-failures=}"
+				;;
+			
+			--remove)
+				_arg_remove="on"
+				;;
+			--no-remove)
+				_arg_remove="off"
+				;;
+			--status)
+				_arg_status="on"
+				;;
+			--no-status)
+				_arg_status="off"
+				;;
+			-v|--verbose)
+				_arg_verbose="on"
+				;;
+			--no-verbose)
+				_arg_verbose="off"
+				;;
+			-h|--help)
+				print_help;
+				exit 0;
+				;;
+			-h*)
+				print_help;
+				exit 0;
+				;;
+			--verbose)
+				if [ $# -lt 2 ];then
+					_verbose_level="$((_verbose_level + 1))";
+				else
+					_verbose_level="$2";
+					shift;
+				fi
+				;;
+			--quiet)
+				if [ $# -lt 2 ];then
+					_verbose_level="$((_verbose_level - 1))";
+				else
+					_verbose_level="-$2";
+					shift;
+				fi
+				;;
+			
+				*)
+				_last_positional="$1"
+				_positionals+=("$_last_positional")
+				_positionals_count=$((_positionals_count + 1))
+				;;
+		esac
+		shift
+	done
+}
+
+
+handle_passed_args_count()
+{
+	local _required_args_string="name"
+	if [ "${_positionals_count}" -gt 1 ] && [ "$_helpHasBeenPrinted" == "1" ];then
+		_PRINT_HELP=yes die "FATAL ERROR: There were spurious positional arguments --- we expect at most 1 (namely: $_required_args_string), but got ${_positionals_count} (the last one was: '${_last_positional}').
+	${_positionals[*]}" 1
+	fi
+	if [ "${_positionals_count}" -lt 1 ] && [ "$_helpHasBeenPrinted" == "1" ];then
+		_PRINT_HELP=yes die "FATAL ERROR: Not enough positional arguments - we require at least 1 (namely: $_required_args_string), but got only ${_positionals_count}.
+	${_positionals[*]}" 1;
+	fi
+}
+
+
+assign_positional_args()
+{
+	local _positional_name _shift_for=$1;
+	_positional_names="_arg_name ";
+	shift "$_shift_for"
+	for _positional_name in ${_positional_names};do
+		test $# -gt 0 || break;
+		eval "if [ \"\$_one_of${_positional_name}\" != \"\" ];then [[ \"\${_one_of${_positional_name}[*]}\" =~ \"\${1}\" ]];fi" || die "${_positional_name} must be one of: $(eval "echo \"\${_one_of${_positional_name}[*]}\"")" 1;
+		local _match_var="_match${_positional_name}";
+		local _regex="${!_match_var}";
+		if [ -n "$_regex" ]; then
+			[[ "${1}" =~ $_regex ]] || die "${_positional_name} does not match pattern: $_regex"
+		fi
+		eval "$_positional_name=\${1}" || die "Error during argument parsing, possibly an ParseArger bug." 1;
+		shift;
+	done
+}
+
+print_debug()
+{
+	print_help
+	# shellcheck disable=SC2145
+	echo "DEBUG: $0 $@";
+	
+	echo -e "	name: ${_arg_name}";
+	echo -e "	interval: ${_arg_interval}";
+	echo -e "	offset: ${_arg_offset}";
+	echo -e "	alert-email: ${_arg_alert_email}";
+	echo -e "	consecutive-failures: ${_arg_consecutive_failures}";
+	echo -e "	remove: ${_arg_remove}";
+	echo -e "	status: ${_arg_status}";
+	echo -e "	verbose: ${_arg_verbose}";
+
+}
+
+
+on_interrupt() {
+	die Process aborted! 130;
+}
+
+
+parse_commandline "$@";
+handle_passed_args_count;
+assign_positional_args 1 "${_positionals[@]}";
+trap on_interrupt INT;
+
+
+
+
+# @parseArger-parsing-end
+# print_debug "$@"
+# @parseArger-end
+
+# Auto-detect project root
+PROJECT_ROOT="$(cd "$_SCRIPT_DIR/../../../.." && pwd)"
+BASE_DIR="$PROJECT_ROOT"
+MOLT_NAME="$_arg_name"
+MOLT_HOME="$BASE_DIR/$MOLT_NAME"
+INTERVAL="$_arg_interval"
+OFFSET="$_arg_offset"
+ALERT_EMAIL="$_arg_alert_email"
+CONSECUTIVE_FAILURES="$_arg_consecutive_failures"
+
+# Validate molt exists
+if [ ! -d "$MOLT_HOME" ]; then
+  die "Molt '$MOLT_NAME' not found at $MOLT_HOME" 1
+fi
+
+# Check molt user exists
+if ! id "$MOLT_NAME" &>/dev/null; then
+  die "User '$MOLT_NAME' does not exist" 1
+fi
+
+# Get molt port for offset calculation
+MOLT_PORT=""
+if [ -f "$MOLT_HOME/.molt-info" ]; then
+  MOLT_PORT=$(grep "MOLT_PORT=" "$MOLT_HOME/.molt-info" | cut -d= -f2)
+fi
+
+# Watch script path (use health-watch in parent _molt directory)
+WATCH_SCRIPT="$_SCRIPT_DIR/../health-watch"
+
+# Calculate offset from molt name/port
+# Ensures staggered schedules across molts
+calculate_offset() {
+    local name="$1"
+    local port="$2"
+    
+    # If port available, use port-based offset
+    if [ -n "$port" ] && [[ "$port" =~ ^[0-9]+$ ]]; then
+        # Map ports 19001, 19021, 19041... to offsets 0, 4, 8...
+        local base_port=19001
+        local offset=$(( (port - base_port) / 5 ))
+        echo $(( offset % INTERVAL ))
+        return
+    fi
+    
+    # Fallback: hash the name
+    local hash=$(echo -n "$name" | md5sum | cut -d' ' -f1)
+    local num=$((0x${hash:0:8}))
+    echo $(( num % INTERVAL ))
+}
+
+# Get current cron jobs for molt user
+get_current_cron() {
+    sudo -u "$MOLT_NAME" crontab -l 2>/dev/null || echo ""
+}
+
+# Remove health-watch entries
+remove_cron() {
+    local current=$(get_current_cron)
+    
+    # Filter out health-watch entries
+    local new_cron=$(echo "$current" | grep -v "# MOLT-HEALTH-WATCH" | grep -v "health-watch")
+    
+    # Install new crontab
+    if [ -z "$new_cron" ]; then
+        echo "" | sudo -u "$MOLT_NAME" crontab - 2>/dev/null || true
+    else
+        echo "$new_cron" | sudo -u "$MOLT_NAME" crontab - 2>/dev/null
+    fi
+    
+    log "Removed health monitoring cron job for $MOLT_NAME" 1
+}
+
+# Show status
+show_status() {
+    local current=$(get_current_cron)
+    local has_health_job=$(echo "$current" | grep "health-watch" || true)
+    
+    if [ -n "$has_health_job" ]; then
+        log "Health monitoring is active for $MOLT_NAME" 1
+        echo ""
+        echo "Current crontab entry:"
+        echo "$current" | grep -A1 "# MOLT-HEALTH-WATCH"
+    else
+        log "No health monitoring configured for $MOLT_NAME" -1
+    fi
+}
+
+# Install cron job
+install_cron() {
+    # Calculate offset if not provided
+    if [ -z "$OFFSET" ]; then
+        OFFSET=$(calculate_offset "$MOLT_NAME" "$MOLT_PORT")
+        log "Auto-calculated offset: $OFFSET minutes (based on port $MOLT_PORT)" 2
+    fi
+    
+    # Validate offset
+    if [[ ! "$OFFSET" =~ ^[0-9]+$ ]] || [ "$OFFSET" -lt 0 ] || [ "$OFFSET" -ge "$INTERVAL" ]; then
+        die "Error: Offset must be between 0 and $((INTERVAL-1))" 1
+    fi
+    
+    # Build alert email argument if provided
+    ALERT_ARG=""
+    if [ -n "$ALERT_EMAIL" ]; then
+        ALERT_ARG="--alert-email $ALERT_EMAIL"
+    fi
+    
+    # Build consecutive failures argument
+    FAILURES_ARG="--consecutive-failures $CONSECUTIVE_FAILURES"
+    
+    # Build cron expression
+    # Runs every INTERVAL minutes, at OFFSET minutes past the hour
+    CRON_MINS="$OFFSET"
+    if [ $INTERVAL -lt 60 ]; then
+        # For intervals under 60 min, create comma-separated list
+        for ((i=OFFSET+INTERVAL; i<60; i+=INTERVAL)); do
+            CRON_MINS="$CRON_MINS,$i"
+        done
+    fi
+    CRON_EXPR="$CRON_MINS * * * *"
+    
+    # Get current crontab
+    local current=$(get_current_cron)
+    
+    # Remove existing health-watch entries
+    local filtered=$(echo "$current" | grep -v "# MOLT-HEALTH-WATCH" | grep -v "health-watch")
+    
+    # Create state directory for logs
+    STATE_DIR="$MOLT_HOME/.molt-state"
+    if [ ! -d "$STATE_DIR" ]; then
+        sudo mkdir -p "$STATE_DIR" 2>/dev/null || true
+        sudo chown "$MOLT_NAME:$MOLT_NAME" "$STATE_DIR" 2>/dev/null || true
+    fi
+    
+    # Create new crontab
+    local new_cron="$filtered
+# MOLT-HEALTH-WATCH - Health check every ${INTERVAL}min (offset: ${OFFSET}, failures: ${CONSECUTIVE_FAILURES})
+$CRON_EXPR $WATCH_SCRIPT $MOLT_NAME $ALERT_ARG $FAILURES_ARG --verbose >> $STATE_DIR/cron.log 2>&1"
+    
+    # Install
+    echo "$new_cron" | sudo -u "$MOLT_NAME" crontab -
+    
+    log "Health monitoring installed for $MOLT_NAME" 1
+    echo ""
+    echo "Schedule: Every $INTERVAL minutes at minute(s): $CRON_MINS"
+    echo "Script: $WATCH_SCRIPT"
+    echo "Log: $STATE_DIR/cron.log"
+    if [ -n "$ALERT_EMAIL" ]; then
+        echo "Alert email: $ALERT_EMAIL"
+    fi
+    echo "Consecutive failures before alert: $CONSECUTIVE_FAILURES"
+}
+
+# Main logic
+if [ "$_arg_status" = "on" ]; then
+    show_status
+    exit 0
+fi
+
+if [ "$_arg_remove" = "on" ]; then
+    remove_cron
+    exit 0
+fi
+
+# Default: install
+install_cron
