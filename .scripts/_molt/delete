@@ -312,23 +312,14 @@ if id "$MOLT_NAME" &>/dev/null; then
   pkill -u "$MOLT_NAME" -f "firefox|chrome|chromium|brave" 2>/dev/null || true
 fi
 
-# Stop and remove OpenClaw systemd service (if exists)
+# Stop and remove OpenClaw systemd user service (if exists)
 log "Removing OpenClaw systemd service..." 1
-# Try user service first
-if systemctl --user -M "$MOLT_NAME@" status openclaw 2>/dev/null | grep -q "Active:"; then
-  log "Found user OpenClaw service, stopping..." 2
+if [ -f "/home/$MOLT_NAME/.config/systemd/user/openclaw.service" ]; then
+  log "Found OpenClaw user service, stopping..." 2
   sudo -u "$MOLT_NAME" systemctl --user stop openclaw 2>/dev/null || true
   sudo -u "$MOLT_NAME" systemctl --user disable openclaw 2>/dev/null || true
   sudo rm -f "/home/$MOLT_NAME/.config/systemd/user/openclaw.service" 2>/dev/null || true
   sudo -u "$MOLT_NAME" systemctl --user daemon-reload 2>/dev/null || true
-fi
-# Try system service
-if systemctl status "openclaw-$MOLT_NAME" 2>/dev/null | grep -q "Active:"; then
-  log "Found system OpenClaw service, stopping..." 2
-  sudo systemctl stop "openclaw-$MOLT_NAME" 2>/dev/null || true
-  sudo systemctl disable "openclaw-$MOLT_NAME" 2>/dev/null || true
-  sudo rm -f "/etc/systemd/system/openclaw-$MOLT_NAME.service" 2>/dev/null || true
-  sudo systemctl daemon-reload 2>/dev/null || true
 fi
 
 # Remove user (if exists)
