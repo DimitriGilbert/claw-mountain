@@ -91,6 +91,31 @@ The individual molt directories are gitignored. Each deployment's bot instances 
 
 **FAILURE TO COMPLY RESULTS IN IMMEDIATE TERMINATION**
 
+### NO "any" TYPES - ZERO TOLERANCE
+
+**ALWAYS USE PROPER TYPES. NEVER USE "any".**
+
+- **FORBIDDEN**: `any`, `: any`, `as any`, `unknown[]` (without proper typing)
+- **FORBIDDEN**: `{ [key: string]: any }` - use proper mapped types or interfaces
+- **FORBIDDEN**: Function parameters without types
+- **FORBIDDEN**: Implicit `any` from missing type annotations
+- **FORBIDDEN**: `Object` type - use `Record<string, T>` or specific interfaces
+
+**Acceptable Patterns**:
+- Use union types for specific values: `'success' | 'error' | 'loading'`
+- Use generics for reusable components: `<T extends object>`
+- Use proper interfaces for data shapes
+- Use `unknown` with type guards for runtime validation
+- Use utility types: `Partial<T>`, `Required<T>`, `Pick<T, K>`
+
+**When you don't know the type**:
+1. Define it properly with an interface
+2. Use a specific type from schema/API
+3. Create a utility type
+4. Ask - do not default to `any`
+
+**FAILURE TO COMPLY RESULTS IN IMMEDIATE TERMINATION**
+
 ### LSP Errors Are Blocking Errors
 
 **When you see an LSP error, YOU STOP EVERYTHING AND FIX IT.**
