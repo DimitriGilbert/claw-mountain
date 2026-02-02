@@ -1,10 +1,5 @@
-# Molts directory - personal user data
-# This is where your actual molt instances are stored
-# DO NOT commit this to version control
-molts/
-
 # Fleet backups - do not commit backup archives
-backups/
+.backups/
 
 # Common development files to ignore
 *.log
@@ -32,4 +27,5 @@ node_modules/
 # yarn.lock
 # pnpm-lock.yaml
 
+# Molts directory
 AD

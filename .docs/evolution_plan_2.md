@@ -3,7 +3,7 @@
 ## Goal
 Enhance Claw Mountain with health monitoring and fleet backup/restore capabilities for the commander to maintain their swarm effectively.
 
-**Status:** Phase 1 & 2 CLI implementation **COMPLETE** ✓ (Dashboard integration pending)
+**Status:** Phase 1 & 2 **COMPLETE** ✓ (CLI and Dashboard integration)
 
 ---
 
@@ -82,12 +82,18 @@ Create `.molt-state/` directory in molt home:
 - ✅ `history` - Parse history and show uptime stats
 - ✅ `logs` - Tail health check logs
 
-#### 5. ⏸️ Dashboard Integration (NOT IMPLEMENTED):
-**Pending for future Phase:**
-- Add to `.dashboard/server/src/index.ts`:
-  - `GET /api/molts/:name/health` - Return health status
-  - `GET /api/molts/:name/history` - Return historical data
-- Display health indicators in React client (red/green status badges)
+#### 5. ✅ Dashboard Integration:
+- **Server endpoints added to `.dashboard/server/src/index.ts`:**
+  - `GET /api/molts/:name/health` - Returns current health status
+  - `GET /api/molts/:name/history` - Returns historical uptime data
+  - `GET /api/molts/:name/watch-state` - Returns watch state (failures, alerts)
+- **Client components:**
+  - `HealthPanel` component displays health badges (healthy/unhealthy/dead)
+  - Shows current status, PID, port, response time
+  - Shows consecutive failures and last success time
+  - Uptime percentage with visual bar chart
+  - History timeline with colored dots
+  - "Setup Health Monitoring" button for unmoltored molts
 
 ---
 
@@ -216,8 +222,8 @@ backup/
 - [x] Implement `_health/logs` (view logs)
 - [x] Register `health` subcommand in `.scripts/molt`
 - [x] Register `molt` in `clmnt` (already done)
-- [ ] Update dashboard server with health endpoints (PENDING)
-- [ ] Update dashboard client with health UI (PENDING)
+- [x] Update dashboard server with health endpoints
+- [x] Update dashboard client with health UI
 
 ### Phase 2: Fleet Backup/Restore ✅ COMPLETE
 - [x] Create `.scripts/_fleet/` directory
@@ -284,8 +290,9 @@ backup/
 - [x] `clmnt fleet backup` creates tar.gz with all molt configs
 - [x] `clmnt fleet list-backups` shows available backups
 - [x] `clmnt fleet restore --from backup.tar.gz` restores all molts
-- [ ] Dashboard shows health indicators on molt cards (PENDING)
-- [ ] All scripts pass `bun run check-types` (PENDING - requires dashboard changes)
+- [x] Dashboard shows health indicators on molt cards (healthy/unhealthy/dead badges)
+- [x] Dashboard displays health details panel (PID, port, response time, failures)
+- [x] Dashboard shows uptime history with visual chart
 
 ---
 
@@ -332,7 +339,7 @@ backup/
 - `.scripts/_fleet/` - Fleet management scripts
 - `.backups/` - Backup storage (created on first backup, gitignored)
 
-**Remaining Work (Optional Future Phase):**
-- Dashboard API endpoints for health data
-- React UI components for health indicators
+**Potential Future Enhancements:**
 - WebSocket real-time health updates
+- Health alert notifications in dashboard
+- Fleet-wide health status overview

@@ -85,6 +85,67 @@ const app = new Elysia()
       return { error: `Failed to get dashboard URL for ${name}` };
     }
   })
+
+  // Get molt health status
+  .get('/api/molts/:name/health', async ({ params: { name } }) => {
+    try {
+      const healthPath = join(PROJECT_ROOT, name, '.molt-state/health-status.json');
+      const healthData = await readFile(healthPath, 'utf-8');
+      const health = JSON.parse(healthData);
+      return {
+        status: health.status,
+        timestamp: health.timestamp,
+        pid: health.pid,
+        port: health.port,
+        http_status: health.http_status,
+        response_time_ms: health.response_time_ms
+      };
+    } catch (error) {
+      return { error: `Failed to get health for ${name}`, status: 'unknown' };
+    }
+  })
+
+  // Get molt health history
+  .get('/api/molts/:name/history', async ({ params: { name } }) => {
+    try {
+      const historyPath = join(PROJECT_ROOT, name, '.molt-state/health-history.jsonl');
+      const historyData = await readFile(historyPath, 'utf-8');
+      const entries = historyData
+        .split('\n')
+        .filter(line => line.trim())
+        .map(line => JSON.parse(line));
+      
+      // Calculate uptime percentage
+      const totalChecks = entries.length;
+      const healthyChecks = entries.filter((e: any) => e.status === 'healthy').length;
+      const uptimePercent = totalChecks > 0 ? (healthyChecks / totalChecks) * 100 : 0;
+      
+      return {
+        entries: entries.slice(-50), // Last 50 entries
+        count: totalChecks,
+        uptime_percent: Math.round(uptimePercent * 100) / 100
+      };
+    } catch (error) {
+      return { error: `Failed to get history for ${name}`, entries: [], count: 0, uptime_percent: 0 };
+    }
+  })
+
+  // Get molt health watch state
+  .get('/api/molts/:name/watch-state', async ({ params: { name } }) => {
+    try {
+      const statePath = join(PROJECT_ROOT, name, '.molt-state/health-watch-state.json');
+      const stateData = await readFile(statePath, 'utf-8');
+      const state = JSON.parse(stateData);
+      return {
+        consecutive_failures: state.consecutive_failures,
+        last_success: state.last_success,
+        alert_sent: state.alert_sent,
+        threshold: state.threshold
+      };
+    } catch (error) {
+      return { error: `Failed to get watch state for ${name}`, consecutive_failures: 0, alert_sent: false };
+    }
+  })
   
   // Broadcast message to all active molts
   .post('/api/broadcast', async ({ body }) => {

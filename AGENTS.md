@@ -76,3 +76,38 @@ Molt configs are stored in `<name>/.openclaw/openclaw.json`:
 ## Privacy Note
 
 The individual molt directories are gitignored. Each deployment's bot instances remain personal and uncommitted.
+
+## Code Quality - READ THIS OR ELSE
+
+### LSP Errors Are Blocking Errors
+
+**When you see an LSP error, YOU STOP EVERYTHING AND FIX IT.**
+
+- **LSP errors are NOT suggestions** - they are real problems that make the codebase worse
+- **Do NOT continue working** until all LSP errors are resolved
+- **Do NOT ignore diagnostics** in the tool output - they matter
+- **Fix errors immediately** - do not "come back to them later"
+
+### Workflow When You See an Error
+
+1. **STOP** - Do not make more changes
+2. **READ** - Understand what the error is telling you
+3. **FIX** - Resolve the error completely
+4. **VERIFY** - Confirm LSP shows no errors
+5. **CONTINUE** - Only then proceed with your task
+
+### Important Distinctions
+
+- **tsc (TypeScript compiler)** catches compile-time errors
+- **LSP (Language Server)** catches real-time errors during editing
+- Both must pass, but **LSP errors appear immediately and must be fixed immediately**
+
+### Dashboard Development Specifics
+
+For `.dashboard/` TypeScript/React code:
+- Run `bun run check-types` in both `client/` and `server/` directories
+- But also watch for LSP diagnostics after every edit
+- CSS/Tailwind theme errors are still errors - fix them
+- Unused variables, missing props, type mismatches - ALL must be fixed
+
+**FAILURE TO FOLLOW THESE RULES RESULTS IN IMMEDIATE TERMINATION**

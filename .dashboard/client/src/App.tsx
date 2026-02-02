@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback } from 'react';
 import { MoltList } from './components/MoltList';
 import { BroadcastPanel } from './components/BroadcastPanel';
 import { MoltStatus } from './types';
-import './App.css';
 
 function App() {
   const [molts, setMolts] = useState<MoltStatus[]>([]);
@@ -32,7 +31,6 @@ function App() {
 
   useEffect(() => {
     fetchMolts();
-    // Auto-refresh every 5 seconds
     const interval = setInterval(fetchMolts, 5000);
     return () => clearInterval(interval);
   }, [fetchMolts]);
@@ -56,33 +54,44 @@ function App() {
   };
 
   return (
-    <div className="app">
-      <header className="header">
-        <h1>🦕 Molt Fleet Dashboard</h1>
-        <div className="summary">
-          <div className="summary-item">
-            <span className="summary-value">{summary.total}</span>
-            <span className="summary-label">Total</span>
+    <div className="min-h-screen flex flex-col bg-bg-primary text-text-primary">
+      <header className="bg-bg-secondary px-8 py-6 border-b border-border-primary flex items-center justify-between gap-8">
+        <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-violet-400 bg-clip-text text-transparent">
+          🦕 Molt Fleet Dashboard
+        </h1>
+        <div className="flex gap-8">
+          <div className="text-center">
+            <span className="block text-2xl font-bold text-text-secondary">{summary.total}</span>
+            <span className="block text-xs uppercase tracking-wider text-text-muted">Total</span>
           </div>
-          <div className="summary-item running">
-            <span className="summary-value">{summary.running}</span>
-            <span className="summary-label">Running</span>
+          <div className="text-center">
+            <span className="block text-2xl font-bold text-status-success">{summary.running}</span>
+            <span className="block text-xs uppercase tracking-wider text-text-muted">Running</span>
           </div>
-          <div className="summary-item stopped">
-            <span className="summary-value">{summary.stopped}</span>
-            <span className="summary-label">Stopped</span>
+          <div className="text-center">
+            <span className="block text-2xl font-bold text-status-error">{summary.stopped}</span>
+            <span className="block text-xs uppercase tracking-wider text-text-muted">Stopped</span>
           </div>
         </div>
-        <button type="button" onClick={fetchMolts} className="refresh-btn" disabled={loading}>
+        <button 
+          type="button" 
+          onClick={fetchMolts} 
+          className="px-4 py-2 bg-action-primary text-text-inverse rounded font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+          disabled={loading}
+        >
           {loading ? 'Loading...' : 'Refresh'}
         </button>
       </header>
 
-      {error && <div className="error">{error}</div>}
+      {error && (
+        <div className="bg-status-error text-text-inverse px-4 py-3 text-center">
+          {error}
+        </div>
+      )}
 
-      <main className="main">
-        <section className="molts-section">
-          <h2>Active Molts</h2>
+      <main className="flex-1 grid grid-cols-1 lg:grid-cols-[1fr_350px] gap-8 p-8 max-w-[1400px] mx-auto w-full">
+        <section>
+          <h2 className="text-text-secondary mb-4">Active Molts</h2>
           <MoltList 
             molts={molts} 
             onStart={handleStart} 
@@ -90,7 +99,7 @@ function App() {
           />
         </section>
 
-        <aside className="sidebar">
+        <aside>
           <BroadcastPanel onBroadcast={fetchMolts} />
         </aside>
       </main>

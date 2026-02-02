@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import './BroadcastPanel.css';
 
 interface BroadcastPanelProps {
   onBroadcast: () => void;
@@ -41,9 +40,9 @@ export function BroadcastPanel({ onBroadcast }: BroadcastPanelProps) {
   };
 
   return (
-    <div className="broadcast-panel">
-      <h3>📢 Broadcast Message</h3>
-      <p className="broadcast-description">
+    <div className="bg-bg-secondary p-6 rounded-lg border border-border-primary">
+      <h3 className="text-lg font-semibold text-text-primary mb-3">📢 Broadcast Message</h3>
+      <p className="text-text-secondary text-sm mb-4">
         Send a message to all running molts simultaneously via isolated sessions.
       </p>
       
@@ -53,11 +52,12 @@ export function BroadcastPanel({ onBroadcast }: BroadcastPanelProps) {
         placeholder="Enter message to broadcast to all active molts..."
         rows={4}
         disabled={sending}
+        className="w-full px-3 py-2 bg-bg-input border border-border-secondary rounded text-text-primary placeholder:text-text-muted focus:outline-none focus:border-action-primary mb-4 resize-y disabled:opacity-50"
       />
       
       <button 
         type="button"
-        className="btn btn-broadcast"
+        className="w-full px-4 py-2 bg-action-secondary text-text-inverse rounded font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
         onClick={handleBroadcast}
         disabled={sending || !message.trim()}
       >
@@ -65,7 +65,9 @@ export function BroadcastPanel({ onBroadcast }: BroadcastPanelProps) {
       </button>
       
       {result && (
-        <div className={`result ${result.success ? 'success' : 'error'}`}>
+        <div className={`mt-4 px-3 py-2 rounded text-sm ${
+          result.success ? 'bg-status-success/20 text-status-success-text border border-status-success/30' : 'bg-status-error/20 text-status-error-text border border-status-error/30'
+        }`}>
           {result.success 
             ? `✅ Message sent to ${result.recipients} molts`
             : '❌ Failed to broadcast message'
@@ -75,3 +77,4 @@ export function BroadcastPanel({ onBroadcast }: BroadcastPanelProps) {
     </div>
   );
 }
+
