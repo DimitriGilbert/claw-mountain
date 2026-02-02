@@ -11,7 +11,7 @@ if [ -t 1 ]; then # Check if stdout is a terminal
 fi
 # @parseArger-declarations
 # @parseArger pos name "Molt name"
-# @parseArger opt base-dir "Base directory for molts" --short d --default-value "/home/didi/molts" --complete "directory"
+# @parseArger opt base-dir "Base directory for molts" --short d --complete "directory"
 # @parseArger opt limit "Number of entries to show" --default-value "20"
 # @parseArger flag json "Output in JSON format"
 # @parseArger-declarations-end
@@ -49,7 +49,11 @@ _positionals=();
 _optional_positionals=();
 _arg_name="";
 # OPTIONALS ARGUMENTS
-_arg_base_dir="/home/didi/molts"
+# Detect base directory (where clmnt is located)
+_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+# Go up four levels: .scripts/_molt/_health/ -> .scripts/_molt/ -> .scripts/ -> project root
+PROJECT_ROOT="$(cd "$_SCRIPT_DIR/../../../.." && pwd)"
+_arg_base_dir="$PROJECT_ROOT"
 _arg_limit="20"
 # FLAGS
 _arg_json="off"
@@ -66,7 +70,7 @@ print_help()
 		_helpHasBeenPrinted=0;
 		echo -e "Show health check history for a molt:"
 	echo -e "	name: Molt name"
-	echo -e "	-d, --base-dir <base-dir>: Base directory for molts [default: ' /home/didi/molts ']"
+	echo -e "	-d, --base-dir <base-dir>: Base directory for molts [default: '<auto-detected>']"
 	echo -e "	--limit <limit>: Number of entries to show [default: ' 20 ']"
 	echo -e "	--json|--no-json: Output in JSON format"
 	echo -e "Usage :

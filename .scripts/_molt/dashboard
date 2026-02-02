@@ -12,7 +12,7 @@ fi
 # @parseArger-declarations
 # @parseArger pos name "Molt name"
 # @parseArger opt host "Host/IP address to use in URL" --short H --default-value "auto"
-# @parseArger opt base-dir "Base directory for molts" --short d --default-value "/home/didi/molts" --complete "directory"
+# @parseArger opt base-dir "Base directory for molts" --short d --complete "directory"
 # @parseArger flag open "Open browser with the URL" --short o
 # @parseArger flag verbose "Enable verbose output" --short v
 # @parseArger-declarations-end

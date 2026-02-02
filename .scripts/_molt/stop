@@ -11,7 +11,7 @@ if [ -t 1 ]; then # Check if stdout is a terminal
 fi
 # @parseArger-declarations
 # @parseArger pos name "Molt name to stop"
-# @parseArger opt base-dir "Base directory for molts" --short d --default-value "/home/didi/molts" --complete "directory"
+# @parseArger opt base-dir "Base directory for molts" --short d --complete "directory"
 # @parseArger flag force "Force kill if graceful stop fails" --short f
 # @parseArger flag verbose "Enable verbose output" --short v
 # @parseArger-declarations-end

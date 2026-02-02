@@ -11,7 +11,7 @@ if [ -t 1 ]; then # Check if stdout is a terminal
 fi
 # @parseArger-declarations
 # @parseArger pos name "Molt name to delete"
-# @parseArger opt base-dir "Base directory for molts" --short d --default-value "/home/didi/molts" --complete "directory"
+# @parseArger opt base-dir "Base directory for molts" --short d --complete "directory"
 # @parseArger flag force "Skip confirmation prompt"
 # @parseArger flag keep-home "Keep home directory (only remove user)"
 # @parseArger flag verbose "Enable verbose output" --short v
@@ -254,6 +254,9 @@ trap on_interrupt INT;
 # print_debug "$@"
 # @parseArger-end
 
+# Source registry library
+source "$_SCRIPT_DIR/../lib/molt-registry" || die "Failed to load registry library" 1
+
 MOLT_NAME="$_arg_name"
 BASE_DIR="$_arg_base_dir"
 MOLT_HOME="$BASE_DIR/$MOLT_NAME"
@@ -326,6 +329,12 @@ fi
 # Clean up any stale PID files
 if [ -f "$MOLT_HOME/.openclaw/gateway.pid" ]; then
   rm -f "$MOLT_HOME/.openclaw/gateway.pid" 2>/dev/null || true
+fi
+
+# Remove from registry
+if check_jq && registry_has_molt "$BASE_DIR" "$MOLT_NAME"; then
+  registry_remove_molt "$BASE_DIR" "$MOLT_NAME"
+  log "Removed '$MOLT_NAME' from registry" 2
 fi
 
 log "Molt '$MOLT_NAME' cleanup completed" 1

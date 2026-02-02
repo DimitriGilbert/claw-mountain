@@ -1,0 +1,142 @@
+#!/bin/bash
+# Test script for molt system - run this on the target machine
+# DO NOT RUN IN DEV ENVIRONMENT
+
+set -e
+
+CLMNT_PATH="$(cd "$(dirname "$0")" && pwd)"
+cd "$CLMNT_PATH"
+
+echo "========================================"
+echo "     MOLT SYSTEM TEST SUITE"
+echo "========================================"
+echo ""
+echo "Project root: $CLMNT_PATH"
+echo ""
+
+PASS=0
+FAIL=0
+
+# Test 1: Check no hardcoded paths
+echo -n "Test 1: No hardcoded /home/didi/molts paths... "
+if grep -r "/home/didi/molts" .scripts/_molt/ 2>/dev/null; then
+  echo "FAIL"
+  echo "  Found hardcoded paths!"
+  FAIL=$((FAIL + 1))
+else
+  echo "PASS"
+  PASS=$((PASS + 1))
+fi
+
+# Test 2: Auto-detection in create script
+echo -n "Test 2: create script has auto-detection... "
+if grep -q "PROJECT_ROOT.*pwd" .scripts/_molt/create; then
+  echo "PASS"
+  PASS=$((PASS + 1))
+else
+  echo "FAIL"
+  FAIL=$((FAIL + 1))
+fi
+
+# Test 3: Auto-detection in delete script
+echo -n "Test 3: delete script has auto-detection... "
+if grep -q "PROJECT_ROOT.*pwd" .scripts/_molt/delete; then
+  echo "PASS"
+  PASS=$((PASS + 1))
+else
+  echo "FAIL"
+  FAIL=$((FAIL + 1))
+fi
+
+# Test 4: Auto-detection in list script
+echo -n "Test 4: list script has auto-detection... "
+if grep -q "PROJECT_ROOT.*pwd" .scripts/_molt/list; then
+  echo "PASS"
+  PASS=$((PASS + 1))
+else
+  echo "FAIL"
+  FAIL=$((FAIL + 1))
+fi
+
+# Test 5: Registry library exists
+echo -n "Test 5: Registry library exists... "
+if [ -f ".scripts/lib/molt-registry" ]; then
+  echo "PASS"
+  PASS=$((PASS + 1))
+else
+  echo "FAIL"
+  FAIL=$((FAIL + 1))
+fi
+
+# Test 6: create script sources registry
+echo -n "Test 6: create script sources registry... "
+if grep -q "source.*molt-registry" .scripts/_molt/create; then
+  echo "PASS"
+  PASS=$((PASS + 1))
+else
+  echo "FAIL"
+  FAIL=$((FAIL + 1))
+fi
+
+# Test 7: delete script sources registry
+echo -n "Test 7: delete script sources registry... "
+if grep -q "source.*molt-registry" .scripts/_molt/delete; then
+  echo "PASS"
+  PASS=$((PASS + 1))
+else
+  echo "FAIL"
+  FAIL=$((FAIL + 1))
+fi
+
+# Test 8: list script uses registry
+echo -n "Test 8: list script uses registry functions... "
+if grep -q "load_registry\|registry_list" .scripts/_molt/list; then
+  echo "PASS"
+  PASS=$((PASS + 1))
+else
+  echo "FAIL"
+  FAIL=$((FAIL + 1))
+fi
+
+# Test 9: Auto-detection in _health scripts
+echo -n "Test 9: _health scripts have auto-detection... "
+HEALTH_OK=1
+for script in .scripts/_molt/_health/check .scripts/_molt/_health/status .scripts/_molt/_health/history .scripts/_molt/_health/logs; do
+  if ! grep -q "PROJECT_ROOT.*pwd" "$script"; then
+    HEALTH_OK=0
+    echo "  Missing in $script"
+  fi
+done
+if [ $HEALTH_OK -eq 1 ]; then
+  echo "PASS"
+  PASS=$((PASS + 1))
+else
+  echo "FAIL"
+  FAIL=$((FAIL + 1))
+fi
+
+# Test 10: jq availability
+echo -n "Test 10: jq is installed... "
+if command -v jq > /dev/null 2>&1; then
+  echo "PASS"
+  PASS=$((PASS + 1))
+else
+  echo "FAIL (jq required for registry)"
+  FAIL=$((FAIL + 1))
+fi
+
+echo ""
+echo "========================================"
+echo "           TEST SUMMARY"
+echo "========================================"
+echo "Passed: $PASS"
+echo "Failed: $FAIL"
+echo ""
+
+if [ $FAIL -eq 0 ]; then
+  echo "All tests passed!"
+  exit 0
+else
+  echo "Some tests failed. Please review."
+  exit 1
+fi

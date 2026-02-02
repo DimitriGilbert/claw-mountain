@@ -13,7 +13,7 @@ fi
 # @parseArger-declarations
 # @parseArger pos name "Molt name"
 # @parseArger pos command "Command to execute"
-# @parseArger opt base-dir "Base directory for molts" --short d --default-value "/home/didi/molts" --complete "directory"
+# @parseArger opt base-dir "Base directory for molts" --short d --complete "directory"
 # @parseArger flag verbose "Enable verbose output" --short v
 # @parseArger-declarations-end
 

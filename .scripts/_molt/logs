@@ -12,7 +12,7 @@ fi
 # @parseArger-declarations
 # @parseArger pos name "Molt name"
 # @parseArger opt lines "Number of lines to show" --short n --default-value "50"
-# @parseArger opt base-dir "Base directory for molts" --short d --default-value "/home/didi/molts" --complete "directory"
+# @parseArger opt base-dir "Base directory for molts" --short d --complete "directory"
 # @parseArger flag follow "Follow/tail logs in real-time" --short f
 # @parseArger flag verbose "Enable verbose output" --short v
 # @parseArger-declarations-end

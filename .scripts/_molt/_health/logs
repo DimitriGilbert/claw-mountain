@@ -11,7 +11,7 @@ if [ -t 1 ]; then # Check if stdout is a terminal
 fi
 # @parseArger-declarations
 # @parseArger pos name "Molt name"
-# @parseArger opt base-dir "Base directory for molts" --short d --default-value "/home/didi/molts" --complete "directory"
+# @parseArger opt base-dir "Base directory for molts" --short d --complete "directory"
 # @parseArger opt lines "Number of lines to show" --short n --default-value "50"
 # @parseArger flag follow "Follow log output" --short f
 # @parseArger flag verbose "Enable verbose output" --short v
@@ -50,7 +50,11 @@ _positionals=();
 _optional_positionals=();
 _arg_name="";
 # OPTIONALS ARGUMENTS
-_arg_base_dir="/home/didi/molts"
+# Detect base directory (where clmnt is located)
+_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+# Go up four levels: .scripts/_molt/_health/ -> .scripts/_molt/ -> .scripts/ -> project root
+PROJECT_ROOT="$(cd "$_SCRIPT_DIR/../../../.." && pwd)"
+_arg_base_dir="$PROJECT_ROOT"
 _arg_lines="50"
 # FLAGS
 _arg_follow="off"
@@ -68,7 +72,7 @@ print_help()
 		_helpHasBeenPrinted=0;
 		echo -e "View health check logs for a molt:"
 	echo -e "	name: Molt name"
-	echo -e "	-d, --base-dir <base-dir>: Base directory for molts [default: ' /home/didi/molts ']"
+	echo -e "	-d, --base-dir <base-dir>: Base directory for molts [default: '<auto-detected>']"
 	echo -e "	-n, --lines <lines>: Number of lines to show [default: ' 50 ']"
 	echo -e "	-f|--follow|--no-follow: Follow log output"
 	echo -e "	-v|--verbose|--no-verbose: Enable verbose output"

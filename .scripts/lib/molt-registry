@@ -1,0 +1,152 @@
+#!/bin/bash
+# Molt Registry Library
+# Provides functions for managing molts.json registry
+# Usage: source "$(dirname "$0")/../lib/molt-registry"
+
+# Detect project root from script location
+detect_project_root() {
+  local script_dir="$1"
+  if [[ "$script_dir" == */_health ]]; then
+    # Health subcommands are 4 levels deep: .scripts/_molt/_health/
+    cd "$script_dir/../../../.." && pwd
+  elif [[ "$script_dir" == */_molt ]]; then
+    # Molt subcommands are 2 levels deep: .scripts/_molt/
+    cd "$script_dir/../.." && pwd
+  else
+    # Default: go up 2 levels from script location
+    cd "$script_dir/../.." && pwd
+  fi
+}
+
+# Get the path to registry file
+get_registry_path() {
+  local base_dir="${1:-$(detect_project_root "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)")}"
+  echo "$base_dir/molts.json"
+}
+
+# Load registry content as JSON string
+load_registry() {
+  local base_dir="$1"
+  local reg_file
+  reg_file=$(get_registry_path "$base_dir")
+  
+  if [ -f "$reg_file" ]; then
+    cat "$reg_file"
+  else
+    echo '{"version":"1","updated":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'","molts":{}}'
+  fi
+}
+
+# Save registry content atomically
+save_registry() {
+  local base_dir="$1"
+  local content="$2"
+  local reg_file
+  local temp_file
+  reg_file=$(get_registry_path "$base_dir")
+  temp_file="${reg_file}.tmp.$$"
+  
+  # Ensure directory exists
+  mkdir -p "$(dirname "$reg_file")"
+  
+  # Write to temp file then move atomically
+  echo "$content" > "$temp_file"
+  mv "$temp_file" "$reg_file"
+}
+
+# Check if molt exists in registry
+registry_has_molt() {
+  local base_dir="$1"
+  local molt_name="$2"
+  local reg_content
+  
+  reg_content=$(load_registry "$base_dir")
+  echo "$reg_content" | jq -e ".molts[\"$molt_name\"]" > /dev/null 2>&1
+}
+
+# Get molt data from registry
+registry_get_molt() {
+  local base_dir="$1"
+  local molt_name="$2"
+  local reg_content
+  
+  reg_content=$(load_registry "$base_dir")
+  echo "$reg_content" | jq -r ".molts[\"$molt_name\"] // empty"
+}
+
+# Add molt to registry
+registry_add_molt() {
+  local base_dir="$1"
+  local molt_name="$2"
+  local port="$3"
+  local home="$4"
+  local created
+  local reg_content
+  local new_reg
+  
+  created=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+  reg_content=$(load_registry "$base_dir")
+  
+  # Add or update molt entry
+  new_reg=$(echo "$reg_content" | jq \
+    --arg name "$molt_name" \
+    --arg port "$port" \
+    --arg home "$home" \
+    --arg created "$created" \
+    --arg updated "$created" \
+    '.updated = $updated | .molts[$name] = {
+      "name": $name,
+      "port": ($port | tonumber),
+      "home": $home,
+      "created": $created
+    }')
+  
+  save_registry "$base_dir" "$new_reg"
+}
+
+# Remove molt from registry
+registry_remove_molt() {
+  local base_dir="$1"
+  local molt_name="$2"
+  local reg_content
+  local new_reg
+  local updated
+  
+  updated=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+  reg_content=$(load_registry "$base_dir")
+  
+  # Remove molt entry
+  new_reg=$(echo "$reg_content" | jq \
+    --arg name "$molt_name" \
+    --arg updated "$updated" \
+    'del(.molts[$name]) | .updated = $updated')
+  
+  save_registry "$base_dir" "$new_reg"
+}
+
+# List all molts in registry
+registry_list_all() {
+  local base_dir="$1"
+  local reg_content
+  
+  reg_content=$(load_registry "$base_dir")
+  echo "$reg_content" | jq -r '.molts | keys[]'
+}
+
+# Get count of molts in registry
+registry_count() {
+  local base_dir="$1"
+  local reg_content
+  
+  reg_content=$(load_registry "$base_dir")
+  echo "$reg_content" | jq -r '.molts | length'
+}
+
+# Check if jq is available
+check_jq() {
+  if ! command -v jq > /dev/null 2>&1; then
+    echo "Error: jq is required but not installed" >&2
+    return 1
+  fi
+  return 0
+}

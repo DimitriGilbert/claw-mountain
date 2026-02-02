@@ -10,7 +10,7 @@ if [ -t 1 ]; then # Check if stdout is a terminal
 	fi
 fi
 # @parseArger-declarations
-# @parseArger opt base-dir "Base directory for molts" --short d --default-value "/home/didi/molts" --complete "directory"
+# @parseArger opt base-dir "Base directory for molts" --short d --complete "directory"
 # @parseArger flag verbose "Show detailed information" --short v
 # @parseArger flag json "Output in JSON format"
 # @parseArger-declarations-end
@@ -47,7 +47,11 @@ begins_with_short_option()
 _positionals=();
 _optional_positionals=();
 # OPTIONALS ARGUMENTS
-_arg_base_dir="/home/didi/molts"
+# Detect base directory (where clmnt is located)
+_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+# Go up two levels: .scripts/_molt/ -> .scripts/ -> project root
+PROJECT_ROOT="$(cd "$_SCRIPT_DIR/../.." && pwd)"
+_arg_base_dir="$PROJECT_ROOT"
 # FLAGS
 _arg_verbose="off"
 _arg_json="off"
@@ -63,7 +67,7 @@ print_help()
 	if [[ "$_helpHasBeenPrinted" == "1" ]]; then
 		_helpHasBeenPrinted=0;
 		echo -e "List all molts and their status:"
-	echo -e "	-d, --base-dir <base-dir>: Base directory for molts [default: ' /home/didi/molts ']"
+	echo -e "	-d, --base-dir <base-dir>: Base directory for molts [default: '<auto-detected>']"
 	echo -e "	-v|--verbose|--no-verbose: Show detailed information"
 	echo -e "	--json|--no-json: Output in JSON format"
 	echo -e "Usage :
@@ -241,10 +245,20 @@ if [ ! -d "$BASE_DIR" ]; then
   die "Base directory not found: $BASE_DIR" 1
 fi
 
+# Source registry library
+source "$_SCRIPT_DIR/../lib/molt-registry" || die "Failed to load registry library" 1
+
+# Check jq is available
+check_jq || die "jq is required for registry operations" 1
+
 # Count molts
 MOLT_COUNT=0
 RUNNING_COUNT=0
 STOPPED_COUNT=0
+
+# Read registry
+REG_CONTENT=$(load_registry "$BASE_DIR")
+MOLT_NAMES=$(echo "$REG_CONTENT" | jq -r '.molts | keys[]')
 
 # JSON output mode
 if [ "$_arg_json" = "on" ]; then
@@ -252,113 +266,22 @@ if [ "$_arg_json" = "on" ]; then
   echo '  "molts": ['
   
   FIRST_MOLT=true
-  for molt_dir in "$BASE_DIR"/*/; do
-    [ -d "$molt_dir" ] || continue
+  while IFS= read -r MOLT_NAME; do
+    [ -z "$MOLT_NAME" ] && continue
     
-    # Check if it's a molt (has .molt-info file)
-    if [ -f "$molt_dir/.molt-info" ]; then
-      MOLT_COUNT=$((MOLT_COUNT + 1))
-      
-      # Load molt info
-      source "$molt_dir/.molt-info"
-      MOLT_NAME=$(basename "$molt_dir")
-      
-      # Get port from config
-      CONFIG_FILE="$molt_dir/.openclaw/openclaw.json"
-      MOLT_PORT="unknown"
-      if [ -f "$CONFIG_FILE" ]; then
-        MOLT_PORT=$(grep -o '"port":[[:space:]]*[0-9]*' "$CONFIG_FILE" 2>/dev/null | grep -o '[0-9]*$' || echo "unknown")
-      fi
-      
-      # Check status
-      PID_FILE="$molt_dir/.openclaw/gateway.pid"
-      STATUS="stopped"
-      PID=""
-      HAS_DOCKER="no"
-      
-      if [ -f "$PID_FILE" ]; then
-        PID=$(cat "$PID_FILE")
-        if ps -p "$PID" > /dev/null 2>&1; then
-          STATUS="running"
-          RUNNING_COUNT=$((RUNNING_COUNT + 1))
-        else
-          STATUS="stale"
-          STOPPED_COUNT=$((STOPPED_COUNT + 1))
-        fi
-      else
-        # Check for orphan processes
-        ORPHAN_PID=$(pgrep -u "$MOLT_NAME" -f "openclaw.*gateway" 2>/dev/null | head -1 || echo "")
-        if [ -n "$ORPHAN_PID" ]; then
-          STATUS="running*"
-          PID="$ORPHAN_PID"
-          RUNNING_COUNT=$((RUNNING_COUNT + 1))
-        else
-          STOPPED_COUNT=$((STOPPED_COUNT + 1))
-        fi
-      fi
-      
-      if id "$MOLT_NAME" &>/dev/null; then
-        HAS_DOCKER=$(id -nG "$MOLT_NAME" 2>/dev/null | grep -qw "docker" && echo "yes" || echo "no")
-      fi
-      
-      # Output JSON object for this molt
-      if [ "$FIRST_MOLT" = true ]; then
-        FIRST_MOLT=false
-      else
-        echo ","
-      fi
-      
-      echo "    {"
-      echo "      \"name\": \"$MOLT_NAME\","
-      echo "      \"port\": \"${MOLT_PORT:-unknown}\","
-      echo "      \"home\": \"$molt_dir\","
-      echo "      \"status\": \"$STATUS\","
-      echo "      \"pid\": \"${PID:-null}\","
-      echo "      \"created\": \"${CREATED:-null}\","
-      echo "      \"docker\": \"$HAS_DOCKER\""
-      echo -n "    }"
-    fi
-  done
-  
-  echo ""
-  echo "  ],"
-  echo "  \"summary\": {"
-  echo "    \"total\": $MOLT_COUNT,"
-  echo "    \"running\": $RUNNING_COUNT,"
-  echo "    \"stopped\": $STOPPED_COUNT"
-  echo "  }"
-  echo "}"
-  
-  exit 0
-fi
-
-# Human-readable output mode
-echo "========================================"
-echo "           MOLT REGISTRY"
-echo "========================================"
-echo ""
-
-for molt_dir in "$BASE_DIR"/*/; do
-  [ -d "$molt_dir" ] || continue
-  
-  # Check if it's a molt (has .molt-info file)
-  if [ -f "$molt_dir/.molt-info" ]; then
     MOLT_COUNT=$((MOLT_COUNT + 1))
     
-    # Load molt info
-    source "$molt_dir/.molt-info"
-    MOLT_NAME=$(basename "$molt_dir")
-    
-    # Get port from config
-    CONFIG_FILE="$molt_dir/.openclaw/openclaw.json"
-    if [ -f "$CONFIG_FILE" ]; then
-      MOLT_PORT=$(grep -o '"port":[[:space:]]*[0-9]*' "$CONFIG_FILE" 2>/dev/null | grep -o '[0-9]*$' || echo "unknown")
-    fi
+    # Get molt data from registry
+    MOLT_DATA=$(echo "$REG_CONTENT" | jq -r ".molts[\"$MOLT_NAME\"]")
+    MOLT_PORT=$(echo "$MOLT_DATA" | jq -r '.port // "unknown"')
+    MOLT_HOME=$(echo "$MOLT_DATA" | jq -r '.home // ""')
+    MOLT_CREATED=$(echo "$MOLT_DATA" | jq -r '.created // "unknown"')
     
     # Check status
-    PID_FILE="$molt_dir/.openclaw/gateway.pid"
+    PID_FILE="$MOLT_HOME/.openclaw/gateway.pid"
     STATUS="stopped"
     PID=""
+    HAS_DOCKER="no"
     
     if [ -f "$PID_FILE" ]; then
       PID=$(cat "$PID_FILE")
@@ -381,23 +304,99 @@ for molt_dir in "$BASE_DIR"/*/; do
       fi
     fi
     
-    # Display molt info
-    echo "Molt:      $MOLT_NAME"
-    echo "Port:      ${MOLT_PORT:-unknown}"
-    echo "Home:      $molt_dir"
-    echo "Status:    $STATUS ${PID:+($PID)}"
-    
-    if [ "$_arg_verbose" = "on" ]; then
-      echo "User:      $MOLT_NAME"
-      if id "$MOLT_NAME" &>/dev/null; then
-        echo "Docker:    $(id -nG "$MOLT_NAME" 2>/dev/null | grep -qw "docker" && echo "yes" || echo "no")"
-      fi
-      echo "Created:   ${CREATED:-unknown}"
+    if id "$MOLT_NAME" &>/dev/null; then
+      HAS_DOCKER=$(id -nG "$MOLT_NAME" 2>/dev/null | grep -qw "docker" && echo "yes" || echo "no")
     fi
     
-    echo "----------------------------------------"
+    # Output JSON object for this molt
+    if [ "$FIRST_MOLT" = true ]; then
+      FIRST_MOLT=false
+    else
+      echo ","
+    fi
+    
+    echo "    {"
+    echo "      \"name\": \"$MOLT_NAME\","
+    echo "      \"port\": \"${MOLT_PORT:-unknown}\","
+    echo "      \"home\": \"$MOLT_HOME\","
+    echo "      \"status\": \"$STATUS\","
+    echo "      \"pid\": \"${PID:-null}\","
+    echo "      \"created\": \"${MOLT_CREATED:-null}\","
+    echo "      \"docker\": \"$HAS_DOCKER\""
+    echo -n "    }"
+  done <<< "$MOLT_NAMES"
+  
+  echo ""
+  echo "  ],"
+  echo "  \"summary\": {"
+  echo "    \"total\": $MOLT_COUNT,"
+  echo "    \"running\": $RUNNING_COUNT,"
+  echo "    \"stopped\": $STOPPED_COUNT"
+  echo "  }"
+  echo "}"
+  
+  exit 0
+fi
+
+# Human-readable output mode
+echo "========================================"
+echo "           MOLT REGISTRY"
+echo "========================================"
+echo ""
+
+while IFS= read -r MOLT_NAME; do
+  [ -z "$MOLT_NAME" ] && continue
+  
+  MOLT_COUNT=$((MOLT_COUNT + 1))
+  
+  # Get molt data from registry
+  MOLT_DATA=$(echo "$REG_CONTENT" | jq -r ".molts[\"$MOLT_NAME\"]")
+  MOLT_PORT=$(echo "$MOLT_DATA" | jq -r '.port // "unknown"')
+  MOLT_HOME=$(echo "$MOLT_DATA" | jq -r '.home // ""')
+  MOLT_CREATED=$(echo "$MOLT_DATA" | jq -r '.created // "unknown"')
+  
+  # Check status
+  PID_FILE="$MOLT_HOME/.openclaw/gateway.pid"
+  STATUS="stopped"
+  PID=""
+  
+  if [ -f "$PID_FILE" ]; then
+    PID=$(cat "$PID_FILE")
+    if ps -p "$PID" > /dev/null 2>&1; then
+      STATUS="running"
+      RUNNING_COUNT=$((RUNNING_COUNT + 1))
+    else
+      STATUS="stale"
+      STOPPED_COUNT=$((STOPPED_COUNT + 1))
+    fi
+  else
+    # Check for orphan processes
+    ORPHAN_PID=$(pgrep -u "$MOLT_NAME" -f "openclaw.*gateway" 2>/dev/null | head -1 || echo "")
+    if [ -n "$ORPHAN_PID" ]; then
+      STATUS="running*"
+      PID="$ORPHAN_PID"
+      RUNNING_COUNT=$((RUNNING_COUNT + 1))
+    else
+      STOPPED_COUNT=$((STOPPED_COUNT + 1))
+    fi
   fi
-done
+  
+  # Display molt info
+  echo "Molt:      $MOLT_NAME"
+  echo "Port:      ${MOLT_PORT:-unknown}"
+  echo "Home:      $MOLT_HOME"
+  echo "Status:    $STATUS ${PID:+($PID)}"
+  
+  if [ "$_arg_verbose" = "on" ]; then
+    echo "User:      $MOLT_NAME"
+    if id "$MOLT_NAME" &>/dev/null; then
+      echo "Docker:    $(id -nG "$MOLT_NAME" 2>/dev/null | grep -qw "docker" && echo "yes" || echo "no")"
+    fi
+    echo "Created:   ${MOLT_CREATED:-unknown}"
+  fi
+  
+  echo "----------------------------------------"
+done <<< "$MOLT_NAMES"
 
 echo ""
 echo "Summary: $MOLT_COUNT molts total ($RUNNING_COUNT running, $STOPPED_COUNT stopped)"
@@ -405,5 +404,5 @@ echo ""
 
 if [ $MOLT_COUNT -eq 0 ]; then
   echo "No molts found. Create one with:"
-  echo "  ${0%/*}/create-molt <name>"
+  echo "  ./clmnt molt create <name>"
 fi

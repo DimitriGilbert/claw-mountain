@@ -12,7 +12,7 @@ fi
 # @parseArger-declarations
 # @parseArger pos name "Molt name (will be used as username)"
 # @parseArger opt port "Gateway port for this molt (default: auto-assign starting from 19001)" --short p
-# @parseArger opt base-dir "Base directory for molts" --short d --default-value "/home/didi/molts" --complete "directory"
+# @parseArger opt base-dir "Base directory for molts" --short d --complete "directory"
 # @parseArger opt skill "Additional skill to install (repeatable)" --repeat
 # @parseArger flag skip-user "Skip user creation (user already exists)"
 # @parseArger flag verbose "Enable verbose output" --short v
@@ -342,6 +342,9 @@ trap on_interrupt INT;
 # print_debug "$@"
 # @parseArger-end
 
+# Source registry library
+source "$_SCRIPT_DIR/../lib/molt-registry" || die "Failed to load registry library" 1
+
 # Molt management configuration
 MOLT_NAME="$_arg_name"
 BASE_DIR="$_arg_base_dir"
@@ -563,6 +566,25 @@ install_skill "DimitriGilbert/ai-skills" "agents-md" || true
 install_skill "DimitriGilbert/ai-skills" "frontend-design" || true
 install_skill "DimitriGilbert/ai-skills" "not-ai-writer" || true
 install_skill "DimitriGilbert/task-o-matic" "task-o-matic" || true
+
+# Add to registry
+if check_jq; then
+  registry_add_molt "$BASE_DIR" "$MOLT_NAME" "$MOLT_PORT" "$MOLT_HOME"
+  log "Added '$MOLT_NAME' to registry" 2
+fi
+
+# Add to .gitignore if not already present
+GITIGNORE_FILE="$BASE_DIR/.gitignore"
+if [ -f "$GITIGNORE_FILE" ]; then
+  if ! grep -q "^$MOLT_NAME/$" "$GITIGNORE_FILE"; then
+    echo "$MOLT_NAME/" >> "$GITIGNORE_FILE"
+    log "Added '$MOLT_NAME/' to .gitignore" 2
+  fi
+else
+  # Create .gitignore with molt entry
+  echo "$MOLT_NAME/" > "$GITIGNORE_FILE"
+  log "Created .gitignore with '$MOLT_NAME/'" 2
+fi
 
 log "Molt '$MOLT_NAME' created successfully!" 1
 log "" 0

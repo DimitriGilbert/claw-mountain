@@ -14,7 +14,7 @@ fi
 # @parseArger opt browser "Browser to launch" --short b --default-value "firefox" --one-of "firefox" --one-of "chromium" --one-of "chrome" --one-of "brave"
 # @parseArger opt profile-dir "Custom profile directory" --short p --complete "directory"
 # @parseArger opt url "URL to open" --short u
-# @parseArger opt base-dir "Base directory for molts" --short d --default-value "/home/didi/molts" --complete "directory"
+# @parseArger opt base-dir "Base directory for molts" --short d --complete "directory"
 # @parseArger flag headless "Run in headless mode (no GUI)"
 # @parseArger flag verbose "Enable verbose output" --short v
 # @parseArger-declarations-end
