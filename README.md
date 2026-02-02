@@ -101,6 +101,10 @@ Creates a new molt with user, home directory, OpenClaw configuration, and option
 Options:
   -p, --port <port>         Specify gateway port (auto-assigns if not provided)
   -d, --base-dir <dir>      Base directory for molts (default: /home/didi/molts)
+  -b, --bind <mode>         Gateway bind mode: loopback|lan|tailnet [default: lan]
+  --token <token>           Gateway auth token (auto-generated if not provided)
+  -a, --agent-type <type>   Agent security profile: personal|restricted|readonly|groups
+                            [default: personal]
   --skill <skill>           Additional skill to install (repeatable)
   --skip-user               Skip user creation (if user already exists)
   -v, --verbose             Enable verbose output
@@ -115,6 +119,12 @@ Tool Installation Flags (all default to 'on'):
   --install-isync           Install isync (IMAP sync tool for receiving emails)
 ```
 
+**Agent Types:**
+- `personal` (default) - Full host access, no sandboxing
+- `restricted` - Always sandboxed, no workspace access
+- `readonly` - Sandboxed with read-only workspace access
+- `groups` - Group chats sandboxed, DMs run on host
+
 **Examples:**
 ```bash
 # Create a new molt with all default tools
@@ -122,6 +132,18 @@ Tool Installation Flags (all default to 'on'):
 
 # Create with specific port
 ./clmnt molt create my-bot -p 19021
+
+# Create localhost-only for security
+./clmnt molt create local-bot --bind loopback
+
+# Create sandboxed public-facing bot
+./clmnt molt create public-bot --agent-type restricted
+
+# Create read-only exploration bot
+./clmnt molt create readonly-bot --agent-type readonly --bind lan
+
+# Create with custom token
+./clmnt molt create my-bot --token my-secret-token-123
 
 # Create without certain tools
 ./clmnt molt create minimal-bot --no-install-gogcli --no-install-msmtp
@@ -528,8 +550,16 @@ sudo -u mybot /path/to/claw-mountain/.scripts/_molt/_mail/watch --force --verbos
 ## Workflow
 
 ### 1. Create a New Molt
+
 ```bash
+# Standard personal molt with LAN access
 ./clmnt molt create my-assistant
+
+# Localhost-only for extra security
+./clmnt molt create my-assistant --bind loopback
+
+# Sandboxed public-facing bot
+./clmnt molt create public-bot --agent-type restricted
 ```
 
 This will:
@@ -537,6 +567,9 @@ This will:
 - Set home directory to `/home/didi/molts/my-assistant`
 - Add user to docker group
 - Create OpenClaw configuration with auto-assigned port
+- Generate secure gateway auth token (displayed in output - save it!)
+- Set secure defaults: dmPolicy=pairing, groupPolicy=allowlist
+- Configure agent type (personal/restricted/readonly/groups)
 - Create workspace and sandbox directories
 - Install development tools (parseArger, Bun, gemini-cli, opencode, gogcli, msmtp)
 - Install default skills for AI assistants
@@ -765,7 +798,9 @@ AI skills are installed via `npx skills` for gemini-cli and opencode:
 - Users are added to the docker group for OpenClaw sandboxing
 - Home directories are isolated
 - OpenClaw configurations are per-molt
-- Gateway binds to loopback by default
+- Gateway auth tokens auto-generated (64-char hex) for LAN access
+- Secure defaults enforced: dmPolicy=pairing, groupPolicy=allowlist, mdns=minimal
+- Four agent types for different security profiles (personal, restricted, readonly, groups)
 - Tool credentials stored in molt's home directory (not system-wide)
 
 ## Requirements
