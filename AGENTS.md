@@ -1,6 +1,6 @@
 # AGENTS.md
 
-This is a collection of bash scripts for managing isolated OpenClaw bot instances (molts) with dedicated users, home directories, and configurations.
+This is a CLI for managing isolated OpenClaw bot instances (molts) with dedicated users, home directories, and configurations.
 
 ## Architecture
 
@@ -13,50 +13,73 @@ Each molt is a Linux user with:
 
 ## Tooling
 
-- **Argument parsing**: All scripts use [parseArger](https://github.com/BunnySweety/parseArger) for robust CLI handling
-- **Base directory**: Default is `/home/didi/molts` (configurable with `-d` flag)
+- **Entry point**: `./clmnt` - Main CLI for all operations
+- **Argument parsing**: Uses [parseArger](https://github.com/DimitriGilbert/parseArger) for robust CLI handling
+- **Base directory**: Default is where clmnt lives (`./`) (configurable with `-d` flag)
 - **Logs**: Stored in `<name>/.openclaw/gateway.log`
 
-## Script Organization
+## Command Structure
 
-All management scripts live in `.scripts/`:
+All commands are accessed through `./clmnt <subcommand> <action>`:
+
+### Molt Subcommands (`./clmnt molt <action>`)
 
 **Core Lifecycle:**
-- `create-molt` - Create new molt with user, config, and directory structure
-- `molt-start` - Start OpenClaw gateway for a molt
-- `molt-stop` - Stop running gateway (graceful with `--force` option)
-- `molt-delete` - Complete removal (user, home, processes)
+- `create` - Create new molt with user, config, and directory structure
+- `start` - Start OpenClaw gateway for a molt
+- `stop` - Stop running gateway (graceful with `--force` option)
+- `delete` - Complete removal (user, home, processes)
 
 **Monitoring & Access:**
-- `molt-list` - Show all molts with status
-- `molt-status` - Detailed status for specific molt
-- `molt-logs` - View/tail gateway logs (`-f` for follow mode)
-- `molt-dashboard` - Get dashboard URL (auto-detects server IP)
+- `list` - Show all molts with status
+- `status` - Detailed status for specific molt
+- `logs` - View/tail gateway logs (`-f` for follow mode)
+- `dashboard` - Get dashboard URL (auto-detects server IP)
+- `health` - Check molt health status
+- `health-watch` - Continuously monitor molt health
 
 **Development Tools:**
-- `molt-shell` - Interactive shell as molt user
-- `molt-exec` - Execute commands as molt user
-- `molt-browser` - Launch browser with isolated profile per molt
-- `molt-clone` - Copy configuration from existing molt to new one
+- `shell` - Interactive shell as molt user
+- `exec` - Execute commands as molt user
+- `browser` - Launch browser with isolated profile per molt
+- `clone` - Copy configuration from existing molt to new one
+
+**Advanced Operations:**
+- `mail` - Mail-related commands for the molt
+- `daemonize` - Run commands as daemonized processes
+- `dropzone-setup` - Configure dropzone file transfer
+
+### Fleet Subcommands (`./clmnt fleet <action>`)
+
+- `backup` - Backup entire fleet configuration
+- `restore` - Restore fleet from backup
+- `list-backups` - List available fleet backups
 
 ## Common Workflows
 
 **Create and start a new molt:**
 ```bash
-./.scripts/create-molt my-bot
+./clmnt molt create my-bot
 sudo -u my-bot openclaw onboard
-./.scripts/molt-start my-bot
+./clmnt molt start my-bot
 ```
 
 **Check status and logs:**
 ```bash
-./.scripts/molt-list
-./.scripts/molt-logs my-bot -f
+./clmnt molt list
+./clmnt molt logs my-bot -f
 ```
 
 **Browser automation setup:**
 ```bash
-./.scripts/molt-browser my-bot -b chrome -u https://gmail.com
+./clmnt molt browser my-bot -b chrome -u https://gmail.com
+```
+
+**Fleet management:**
+```bash
+./clmnt fleet backup my-backup-name
+./clmnt fleet restore my-backup-name
+./clmnt fleet list-backups
 ```
 
 ## Configuration

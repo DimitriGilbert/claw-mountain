@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
-import { HealthStatus, HealthHistory, HealthWatchState } from '../types';
-import { Badge, Button, TerminalText } from './ui';
+import { useState, useEffect, useCallback } from "react";
+import { HealthStatus, HealthHistory, HealthWatchState } from "../types";
+import { Badge, Button, TerminalText } from "./ui";
 
 interface HealthPanelProps {
   moltName: string;
@@ -25,7 +25,7 @@ export function HealthPanel({ moltName, isRunning }: HealthPanelProps) {
       const [healthRes, historyRes, watchRes] = await Promise.all([
         fetch(`/api/molts/${moltName}/health`),
         fetch(`/api/molts/${moltName}/history`),
-        fetch(`/api/molts/${moltName}/watch-state`)
+        fetch(`/api/molts/${moltName}/watch-state`),
       ]);
 
       const healthData = await healthRes.json();
@@ -36,7 +36,7 @@ export function HealthPanel({ moltName, isRunning }: HealthPanelProps) {
       if (!historyData.error) setHistory(historyData);
       if (!watchData.error) setWatchState(watchData);
     } catch (err) {
-      setError('Failed to fetch health data');
+      setError("Failed to fetch health data");
     } finally {
       setLoading(false);
     }
@@ -45,16 +45,16 @@ export function HealthPanel({ moltName, isRunning }: HealthPanelProps) {
   const handleSetupHealth = async () => {
     try {
       const response = await fetch(`/api/molts/${moltName}/health/setup`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ interval: 5 })
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ interval: 5 }),
       });
 
       if (response.ok) {
         fetchHealthData();
       }
     } catch (err) {
-      console.error('Failed to setup health monitoring:', err);
+      console.error("Failed to setup health monitoring:", err);
     }
   };
 
@@ -66,21 +66,31 @@ export function HealthPanel({ moltName, isRunning }: HealthPanelProps) {
     }
   }, [fetchHealthData, isRunning]);
 
-  const getHealthBadgeVariant = (status: string): 'success' | 'warning' | 'error' | 'neutral' => {
+  const getHealthBadgeVariant = (
+    status: string,
+  ): "success" | "warning" | "error" | "neutral" => {
     switch (status) {
-      case 'healthy': return 'success';
-      case 'unhealthy': return 'warning';
-      case 'dead': return 'error';
-      default: return 'neutral';
+      case "healthy":
+        return "success";
+      case "unhealthy":
+        return "warning";
+      case "dead":
+        return "error";
+      default:
+        return "neutral";
     }
   };
 
   const getHealthTextColor = (status: string) => {
     switch (status) {
-      case 'healthy': return 'text-status-success';
-      case 'unhealthy': return 'text-status-warning';
-      case 'dead': return 'text-status-error';
-      default: return 'text-text-muted';
+      case "healthy":
+        return "text-status-success";
+      case "unhealthy":
+        return "text-status-warning";
+      case "dead":
+        return "text-status-error";
+      default:
+        return "text-text-muted";
     }
   };
 
@@ -116,24 +126,34 @@ export function HealthPanel({ moltName, isRunning }: HealthPanelProps) {
         <Badge variant={getHealthBadgeVariant(health.status)}>
           {health.status}
         </Badge>
-        <Button variant="ghost" size="sm" onClick={() => setShowDetails(!showDetails)}>
-          {showDetails ? 'Hide' : 'Details'}
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setShowDetails(!showDetails)}
+        >
+          {showDetails ? "Hide" : "Details"}
         </Button>
       </div>
 
       {showDetails && (
         <div className="mt-4 p-4 bg-bg-input rounded-lg border border-border-primary">
           <div className="mb-4">
-            <h4 className="text-sm text-text-muted uppercase tracking-wider mb-2 font-medium">Current Status</h4>
+            <h4 className="text-sm text-text-muted uppercase tracking-wider mb-2 font-medium">
+              Current Status
+            </h4>
             <div className="flex justify-between py-1.5 border-b border-border-primary">
               <span className="text-sm text-text-muted">Status:</span>
-              <span className={`text-sm font-medium ${getHealthTextColor(health.status)}`}>
+              <span
+                className={`text-sm font-medium ${getHealthTextColor(health.status)}`}
+              >
                 {health.status}
               </span>
             </div>
             <div className="flex justify-between py-1.5 border-b border-border-primary">
               <span className="text-sm text-text-muted">Last Check:</span>
-              <TerminalText className="text-sm">{new Date(health.timestamp).toLocaleString()}</TerminalText>
+              <TerminalText className="text-sm">
+                {new Date(health.timestamp).toLocaleString()}
+              </TerminalText>
             </div>
             <div className="flex justify-between py-1.5 border-b border-border-primary">
               <span className="text-sm text-text-muted">PID:</span>
@@ -145,27 +165,39 @@ export function HealthPanel({ moltName, isRunning }: HealthPanelProps) {
             </div>
             <div className="flex justify-between py-1.5 border-b border-border-primary">
               <span className="text-sm text-text-muted">Response Time:</span>
-              <TerminalText className="text-sm">{health.response_time_ms}ms</TerminalText>
+              <TerminalText className="text-sm">
+                {health.response_time_ms}ms
+              </TerminalText>
             </div>
             <div className="flex justify-between py-1.5">
               <span className="text-sm text-text-muted">HTTP Status:</span>
-              <TerminalText className="text-sm">{health.http_status}</TerminalText>
+              <TerminalText className="text-sm">
+                {health.http_status}
+              </TerminalText>
             </div>
           </div>
 
           {watchState && (
             <div className="mb-4">
-              <h4 className="text-sm text-text-muted uppercase tracking-wider mb-2 font-medium">Watch State</h4>
+              <h4 className="text-sm text-text-muted uppercase tracking-wider mb-2 font-medium">
+                Watch State
+              </h4>
               <div className="flex justify-between py-1.5 border-b border-border-primary">
-                <span className="text-sm text-text-muted">Consecutive Failures:</span>
-                <span className={`text-sm font-medium ${watchState.consecutive_failures > 0 ? 'text-status-warning' : 'text-text-secondary'}`}>
+                <span className="text-sm text-text-muted">
+                  Consecutive Failures:
+                </span>
+                <span
+                  className={`text-sm font-medium ${watchState.consecutive_failures > 0 ? "text-status-warning" : "text-text-secondary"}`}
+                >
                   {watchState.consecutive_failures} / {watchState.threshold}
                 </span>
               </div>
               {watchState.last_success && (
                 <div className="flex justify-between py-1.5 border-b border-border-primary">
                   <span className="text-sm text-text-muted">Last Success:</span>
-                  <TerminalText className="text-sm">{new Date(watchState.last_success).toLocaleString()}</TerminalText>
+                  <TerminalText className="text-sm">
+                    {new Date(watchState.last_success).toLocaleString()}
+                  </TerminalText>
                 </div>
               )}
               {watchState.alert_sent && (
@@ -178,20 +210,26 @@ export function HealthPanel({ moltName, isRunning }: HealthPanelProps) {
 
           {history && history.count > 0 && (
             <div>
-              <h4 className="text-sm text-text-muted uppercase tracking-wider mb-2 font-medium">Uptime History</h4>
+              <h4 className="text-sm text-text-muted uppercase tracking-wider mb-2 font-medium">
+                Uptime History
+              </h4>
               <div className="h-2 bg-bg-tertiary rounded-full overflow-hidden mb-2">
                 <div
                   className={`h-full transition-all duration-300 rounded-full ${
-                    history.uptime_percent > 95 ? 'bg-status-success' :
-                    history.uptime_percent > 80 ? 'bg-status-warning' :
-                    'bg-status-error'
+                    history.uptime_percent > 95
+                      ? "bg-status-success"
+                      : history.uptime_percent > 80
+                        ? "bg-status-warning"
+                        : "bg-status-error"
                   }`}
                   style={{ width: `${history.uptime_percent}%` }}
                 />
               </div>
               <div className="flex justify-between py-1.5 border-b border-border-primary">
                 <span className="text-sm text-text-muted">Uptime:</span>
-                <TerminalText className="text-sm">{history.uptime_percent}%</TerminalText>
+                <TerminalText className="text-sm">
+                  {history.uptime_percent}%
+                </TerminalText>
               </div>
               <div className="flex justify-between py-1.5">
                 <span className="text-sm text-text-muted">Total Checks:</span>
@@ -203,10 +241,14 @@ export function HealthPanel({ moltName, isRunning }: HealthPanelProps) {
                   <div
                     key={`${entry.timestamp}-${entry.status}`}
                     className={`
-                      w-2 h-2 rounded-full flex-shrink-0
-                      ${entry.status === 'healthy' ? 'bg-status-success' :
-                        entry.status === 'unhealthy' ? 'bg-status-warning' :
-                        'bg-status-error'}
+                      w-2 h-2 rounded-full shrink-0
+                      ${
+                        entry.status === "healthy"
+                          ? "bg-status-success"
+                          : entry.status === "unhealthy"
+                            ? "bg-status-warning"
+                            : "bg-status-error"
+                      }
                     `}
                     title={`${entry.timestamp}: ${entry.status} (${entry.response_time_ms}ms)`}
                   />
@@ -219,4 +261,3 @@ export function HealthPanel({ moltName, isRunning }: HealthPanelProps) {
     </div>
   );
 }
-
